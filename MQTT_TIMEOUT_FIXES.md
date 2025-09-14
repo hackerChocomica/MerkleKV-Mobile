@@ -10,14 +10,42 @@ This document summarizes the comprehensive fixes implemented to resolve MQTT con
 - **Missing Health Checks**: No validation of broker readiness before running tests
 - **Incomplete Cleanup**: Stale connections persisted between test runs
 - **CI Configuration**: Service containers not properly configured for testing
+- **Docker Mount Issue**: Volume mount path referenced before repository checkout, causing container creation failure
 
 ### Most Common Errors
 - `Connection failed: DisconnectionReason.timeout`
 - `Exception: Connection timeout after 2 seconds`
 - `Socket error on client <unknown>, disconnecting`
 - `Authentication failed` during anonymous test connections
+- `failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: error mounting`
 
 ## ✅ Solutions Implemented
+
+### 1. Fixed Docker Service Container Configuration
+
+**Problem**: Volume mount referenced file before repository checkout
+```yaml
+# BROKEN - File doesn't exist when container starts
+volumes:
+  - ${{ github.workspace }}/broker/mosquitto/config/mosquitto-test.conf:/mosquitto/config/mosquitto.conf:ro
+```
+
+**Solution**: Removed problematic volume mount, using default configuration
+```yaml
+services:
+  mosquitto:
+    image: eclipse-mosquitto:1.6
+    ports:
+      - 1883:1883
+      - 9001:9001
+    # Using default config - anonymous access should work
+    options: >-
+      --health-cmd "mosquitto_pub -h localhost -p 1883 -t health/check -m test --qos 0"
+      --health-interval 10s
+      --health-timeout 5s
+      --health-retries 5
+      --health-start-period 10s
+```
 
 ### 1. Connection Timeout Increase
 
@@ -99,11 +127,11 @@ tearDown(() async {
 });
 ```
 
-### 5. CI/CD Workflow Enhancements
+### 5. CI/CD Workflow Improvements
 
 **File**: `.github/workflows/full_ci.yml`
 
-#### Service Container Configuration
+#### Service Container Configuration (Fixed)
 ```yaml
 services:
   mosquitto:
@@ -111,8 +139,8 @@ services:
     ports:
       - 1883:1883
       - 9001:9001
-    volumes:
-      - ${{ github.workspace }}/broker/mosquitto/config/mosquitto-test.conf:/mosquitto/config/mosquitto.conf:ro
+    # FIXED: Removed problematic volume mount that referenced files before checkout
+    # Using default mosquitto config which should allow anonymous connections
     options: >-
       --health-cmd "mosquitto_pub -h localhost -p 1883 -t health/check -m test --qos 0"
       --health-interval 10s
@@ -126,6 +154,10 @@ services:
 - name: 🔌 MQTT Broker Health Check (Integration Tier)
   if: matrix.tier == 'integration'
   run: |
+    # Install required tools
+    sudo apt-get update && sudo apt-get install -y mosquitto-clients netcat-openbsd
+    
+    # Run comprehensive health check
     chmod +x ./scripts/mqtt_health_check.sh
     MQTT_BROKER_HOST=localhost \
     MQTT_BROKER_PORT=1883 \

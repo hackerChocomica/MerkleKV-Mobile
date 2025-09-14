@@ -263,8 +263,8 @@ jobs:
         ports:
           - 1883:1883
           - 9001:9001
-        volumes:
-          - ${{ github.workspace }}/broker/mosquitto/config/mosquitto-test.conf:/mosquitto/config/mosquitto.conf:ro
+        # Note: Using default config with anonymous access enabled for testing
+        # Custom test config will be applied via environment variables if needed
         options: >-
           --health-cmd "mosquitto_pub -h localhost -p 1883 -t health/check -m test --qos 0"
           --health-interval 10s
@@ -315,6 +315,13 @@ jobs:
         if: matrix.tier == 'integration'
         run: |
           echo "Running comprehensive MQTT broker health check..."
+          
+          # Install mosquitto clients if not available
+          sudo apt-get update && sudo apt-get install -y mosquitto-clients netcat-openbsd
+          
+          # Verify the service container is running
+          echo "Checking Docker containers..."
+          docker ps | grep mosquitto || echo "No mosquitto container found via grep"
           
           # Make health check script executable
           chmod +x ./scripts/mqtt_health_check.sh
