@@ -157,7 +157,7 @@ void main() {
         expect(entriesBeforeGC.length, equals(2));
 
         // Run garbage collection
-        final removedCount = storage.garbageCollectTombstones();
+        final removedCount = await storage.garbageCollectTombstones();
 
         // Should have removed 1 expired tombstone
         expect(removedCount, equals(1));
@@ -192,7 +192,7 @@ void main() {
         storage.put('older-key', olderTombstone);
 
         // Run garbage collection
-        final removedCount = storage.garbageCollectTombstones();
+        final removedCount = await storage.garbageCollectTombstones();
 
         // No tombstones should be removed (both are recent)
         expect(removedCount, equals(0));
@@ -218,7 +218,7 @@ void main() {
         storage.put('old-regular-key', oldEntry);
 
         // Run garbage collection
-        final removedCount = storage.garbageCollectTombstones();
+        final removedCount = await storage.garbageCollectTombstones();
 
         // No entries should be removed
         expect(removedCount, equals(0));
@@ -227,7 +227,7 @@ void main() {
         expect(result?.value, equals('old-value'));
       });
 
-      test('returns zero when no tombstones to collect', () {
+      test('returns zero when no tombstones to collect', () async {
         // Add only regular entries
         final entry = TestDataFactory.createEntry(
           key: 'regular-key',
@@ -240,13 +240,13 @@ void main() {
 
         storage.put('regular-key', entry);
 
-        final removedCount = storage.garbageCollectTombstones();
+        final removedCount = await storage.garbageCollectTombstones();
         expect(removedCount, equals(0));
       });
     });
 
     group('UTF-8 Validation', () {
-      test('accepts valid UTF-8 strings', () {
+      test('accepts valid UTF-8 strings', () async {
         final validEntry = TestDataFactory.createEntry(
           key: 'test-key',
           value: 'valid-utf8-value',
@@ -255,7 +255,7 @@ void main() {
         
         // Valid UTF-8 should succeed
         storage.put('test-key', validEntry);
-        expect(storage.get('test-key'), isNotNull);
+        expect(await storage.get('test-key'), isNotNull);
         
         // Test multi-byte UTF-8 characters
         final emojiEntry = TestDataFactory.createEntry(
@@ -265,10 +265,10 @@ void main() {
         );
         
         storage.put('🚀test🌟key🔥', emojiEntry);
-        expect(storage.get('🚀test🌟key🔥'), isNotNull);
+        expect(await storage.get('🚀test🌟key🔥'), isNotNull);
       });
 
-      test('UTF-8 byte length validation for keys and values', () {
+      test('UTF-8 byte length validation for keys and values', () async {
         // Test key size validation with multi-byte characters
         final maxKeyUtf8 = '🚀' * 64; // Each emoji is 4 bytes = 256 bytes total
         TestAssertions.assertUtf8ByteLength(maxKeyUtf8, 256);
@@ -281,7 +281,7 @@ void main() {
         
         // Should succeed at boundary
         storage.put(maxKeyUtf8, maxKeyEntry);
-        expect(storage.get(maxKeyUtf8), isNotNull);
+        expect(await storage.get(maxKeyUtf8), isNotNull);
 
         // Test value size validation with multi-byte characters
         final maxValueUtf8 = '⚡' * (64 * 1024); // Each emoji is 4 bytes = 256KiB total
@@ -295,12 +295,12 @@ void main() {
         
         // Should succeed at boundary
         storage.put('test-key', maxValueEntry);
-        expect(storage.get('test-key'), isNotNull);
+        expect(await storage.get('test-key'), isNotNull);
       });
     });
 
     group('Deduplication by (node_id, seq)', () {
-      test('prevents duplicate (node_id, seq) entries', () {
+      test('prevents duplicate (node_id, seq) entries', () async {
         // Create two entries with same (node_id, seq) but different keys
         final entry1 = TestDataFactory.createEntry(
           key: 'key1',
@@ -323,11 +323,11 @@ void main() {
         // Second entry should be ignored due to duplicate (node_id, seq)
         storage.put('key2', entry2);
 
-        expect(storage.get('key1'), isNotNull);
-        expect(storage.get('key2'), isNull); // Should not exist
+        expect(await storage.get('key1'), isNotNull);
+        expect(await storage.get('key2'), isNull); // Should not exist
       });
 
-      test('allows different node_id with same seq', () {
+      test('allows different node_id with same seq', () async {
         final entry1 = TestDataFactory.createEntry(
           key: 'key1',
           value: 'value1',
@@ -347,11 +347,11 @@ void main() {
         storage.put('key1', entry1);
         storage.put('key2', entry2);
 
-        expect(storage.get('key1'), isNotNull);
-        expect(storage.get('key2'), isNotNull); // Should both exist
+        expect(await storage.get('key1'), isNotNull);
+        expect(await storage.get('key2'), isNotNull); // Should both exist
       });
 
-      test('allows same node_id with different seq', () {
+      test('allows same node_id with different seq', () async {
         final entry1 = TestDataFactory.createEntry(
           key: 'key1',
           value: 'value1',
@@ -371,8 +371,8 @@ void main() {
         storage.put('key1', entry1);
         storage.put('key2', entry2);
 
-        expect(storage.get('key1'), isNotNull);
-        expect(storage.get('key2'), isNotNull); // Should both exist
+        expect(await storage.get('key1'), isNotNull);
+        expect(await storage.get('key2'), isNotNull); // Should both exist
       });
     });
 
@@ -405,7 +405,7 @@ void main() {
         expect(result?.timestampMs, equals(entry2.timestampMs));
       });
 
-      test('property: tombstone GC preserves entries within 24h window', () {
+      test('property: tombstone GC preserves entries within 24h window', () async {
         final recentTimestamp = DateTime.now().millisecondsSinceEpoch - (20 * 60 * 60 * 1000); // 20 hours ago
         
         final tombstone = TestDataFactory.createEntry(
@@ -417,7 +417,7 @@ void main() {
         );
 
         storage.put('recent-tombstone', tombstone);
-        final removedCount = storage.garbageCollectTombstones();
+        final removedCount = await storage.garbageCollectTombstones();
 
         // Should not remove recent tombstones
         expect(removedCount, equals(0));

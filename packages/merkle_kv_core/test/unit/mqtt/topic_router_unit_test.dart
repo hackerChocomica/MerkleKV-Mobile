@@ -281,13 +281,13 @@ void main() {
 
       test('topic length validation with edge cases', () {
         final edgeCases = [
-          // Exactly at limits
-          ('a' * 64, 'b' * 30), // prefix=64, client=30, +/cmd = 98 bytes total
-          ('a' * 63, 'b' * 31), // prefix=63, client=31, +/cmd = 98 bytes total
+          // Exactly at limits - prefix ≤50 bytes, total ≤100 bytes
+          ('a' * 50, 'b' * 30), // prefix=50, client=30, +/cmd = 84 bytes total
+          ('a' * 45, 'b' * 40), // prefix=45, client=40, +/cmd = 89 bytes total
           
           // Mixed character sets
-          ('café' * 15, 'señor'), // Accented characters
-          ('北京' * 10, '東京'), // CJK characters
+          ('café' * 10, 'señor'), // Accented characters - prefix ~50 bytes
+          ('北京' * 8, '東京'), // CJK characters - prefix ~48 bytes
         ];
 
         for (final (prefix, clientId) in edgeCases) {

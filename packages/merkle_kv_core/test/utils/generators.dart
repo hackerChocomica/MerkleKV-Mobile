@@ -9,9 +9,11 @@ class TestGenerators {
   static int randomTimestamp({int? seed}) {
     final random = seed != null ? Random(seed) : _random;
     final now = DateTime.now().millisecondsSinceEpoch;
-    // Generate timestamps within ±1 year to test LWW edge cases
-    final yearMs = 365 * 24 * 60 * 60 * 1000;
-    return now + random.nextInt(2 * yearMs) - yearMs;
+    // Generate timestamps within ±7 days to test LWW edge cases
+    // 7 days * 24 hours * 60 minutes * 60 seconds * 1000 milliseconds = 604,800,000
+    // Range is 2 * 604,800,000 = 1,209,600,000 which is well under 2^32 limit
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    return now + random.nextInt(2 * sevenDaysMs) - sevenDaysMs;
   }
 
   /// Generates random node IDs with realistic format patterns
@@ -211,8 +213,9 @@ class TestGenerators {
     }
     
     if (includeDuplicates && keys.length > 2) {
-      // Add some duplicates
-      keys[random.nextInt(keys.length)] = keys[0];
+      // Add some duplicates by replacing a key that's not the first one
+      final targetIndex = 1 + random.nextInt(keys.length - 1); // Never index 0
+      keys[targetIndex] = keys[0]; // Create duplicate of first key
     }
     
     return keys;
