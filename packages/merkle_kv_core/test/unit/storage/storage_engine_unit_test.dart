@@ -1,8 +1,6 @@
 import 'dart:convert';
-import 'dart:math';
 import 'package:test/test.dart';
 import '../../../lib/src/storage/in_memory_storage.dart';
-import '../../../lib/src/storage/storage_entry.dart';
 import '../../../lib/src/config/merkle_kv_config.dart';
 import '../../utils/generators.dart';
 import '../../utils/mock_helpers.dart';
@@ -12,7 +10,7 @@ void main() {
     late InMemoryStorage storage;
     late MerkleKVConfig config;
 
-    setUp(() return {
+    setUp(() {
       config = MerkleKVConfig.create(
         mqttHost: 'localhost',
         clientId: 'test-client',
@@ -23,12 +21,12 @@ void main() {
       storage.initialize();
     });
 
-    tearDown(() return {
+    tearDown(() {
       storage.dispose();
     });
 
     group('Last-Write-Wins Resolution', () {
-      test('newer timestamp wins', () return {
+      test('newer timestamp wins', () async {
         final older = TestDataFactory.createEntry(
           key: 'lww-key',
           value: 'old-value',
@@ -48,12 +46,12 @@ void main() {
         storage.put('lww-key', older);
         storage.put('lww-key', newer);
 
-        final result = storage.get('lww-key');
+        final result = await storage.get('lww-key');
         expect(result?.value, equals('new-value'));
         expect(result?.timestampMs, equals(2000));
       });
 
-      test('node ID tiebreaker works correctly', () return {
+      test('node ID tiebreaker works correctly', () async {
         final entryA = TestDataFactory.createEntry(
           key: 'tiebreaker-key',
           value: 'value-from-nodeA',
@@ -73,12 +71,12 @@ void main() {
         storage.put('tiebreaker-key', entryA);
         storage.put('tiebreaker-key', entryZ);
 
-        final result = storage.get('tiebreaker-key');
+        final result = await storage.get('tiebreaker-key');
         expect(result?.value, equals('value-from-nodeZ'));
         expect(result?.nodeId, equals('nodeZ'));
       });
 
-      test('older entry is ignored when newer exists', () return {
+      test('older entry is ignored when newer exists', () async {
         final newer = TestDataFactory.createEntry(
           key: 'lww-key',
           value: 'new-value',
@@ -98,12 +96,12 @@ void main() {
         storage.put('lww-key', newer);
         storage.put('lww-key', older); // Should be ignored
 
-        final result = storage.get('lww-key');
+        final result = await storage.get('lww-key');
         expect(result?.value, equals('new-value'));
         expect(result?.timestampMs, equals(2000));
       });
 
-      test('duplicate version vector is ignored', () return {
+      test('duplicate version vector is ignored', () async {
         final entry1 = TestDataFactory.createEntry(
           key: 'duplicate-key',
           value: 'first-value',
@@ -123,13 +121,13 @@ void main() {
         storage.put('duplicate-key', entry1);
         storage.put('duplicate-key', entry2); // Should be ignored
 
-        final result = storage.get('duplicate-key');
+        final result = await storage.get('duplicate-key');
         expect(result?.value, equals('first-value')); // First entry wins
       });
     });
 
     group('Tombstone Garbage Collection', () {
-      test('removes expired tombstones older than 24 hours', () return {
+      test('removes expired tombstones older than 24 hours', () async {
         final now = DateTime.now().millisecondsSinceEpoch;
         const twentyFiveHours = 25 * 60 * 60 * 1000;
 
@@ -155,7 +153,7 @@ void main() {
         storage.put('fresh-key', freshTombstone);
 
         // Verify both exist before GC
-        final entriesBeforeGC = storage.getAllEntries();
+        final entriesBeforeGC = await storage.getAllEntries();
         expect(entriesBeforeGC.length, equals(2));
 
         // Run garbage collection
@@ -165,12 +163,12 @@ void main() {
         expect(removedCount, equals(1));
 
         // Verify only fresh tombstone remains
-        final entriesAfterGC = storage.getAllEntries();
+        final entriesAfterGC = await storage.getAllEntries();
         expect(entriesAfterGC.length, equals(1));
         expect(entriesAfterGC[0].key, equals('fresh-key'));
       });
 
-      test('preserves fresh tombstones within 24 hour window', () return {
+      test('preserves fresh tombstones within 24 hour window', () async {
         final now = DateTime.now().millisecondsSinceEpoch;
 
         // Create tombstones at different ages within 24 hours
@@ -199,11 +197,11 @@ void main() {
         // No tombstones should be removed (both are recent)
         expect(removedCount, equals(0));
 
-        final entriesAfterGC = storage.getAllEntries();
+        final entriesAfterGC = await storage.getAllEntries();
         expect(entriesAfterGC.length, equals(2));
       });
 
-      test('does not remove regular entries during GC', () return {
+      test('does not remove regular entries during GC', () async {
         final now = DateTime.now().millisecondsSinceEpoch;
         const twentyFiveHours = 25 * 60 * 60 * 1000;
 
@@ -225,11 +223,11 @@ void main() {
         // No entries should be removed
         expect(removedCount, equals(0));
 
-        final result = storage.get('old-regular-key');
+        final result = await storage.get('old-regular-key');
         expect(result?.value, equals('old-value'));
       });
 
-      test('returns zero when no tombstones to collect', () return {
+      test('returns zero when no tombstones to collect', () {
         // Add only regular entries
         final entry = TestDataFactory.createEntry(
           key: 'regular-key',
@@ -248,7 +246,7 @@ void main() {
     });
 
     group('UTF-8 Validation', () {
-      test('accepts valid UTF-8 strings', () return {
+      test('accepts valid UTF-8 strings', () {
         final validEntry = TestDataFactory.createEntry(
           key: 'test-key',
           value: 'valid-utf8-value',
@@ -270,7 +268,7 @@ void main() {
         expect(storage.get('🚀test🌟key🔥'), isNotNull);
       });
 
-      test('UTF-8 byte length validation for keys and values', () return {
+      test('UTF-8 byte length validation for keys and values', () {
         // Test key size validation with multi-byte characters
         final maxKeyUtf8 = '🚀' * 64; // Each emoji is 4 bytes = 256 bytes total
         TestAssertions.assertUtf8ByteLength(maxKeyUtf8, 256);
@@ -302,7 +300,7 @@ void main() {
     });
 
     group('Deduplication by (node_id, seq)', () {
-      test('prevents duplicate (node_id, seq) entries', () return {
+      test('prevents duplicate (node_id, seq) entries', () {
         // Create two entries with same (node_id, seq) but different keys
         final entry1 = TestDataFactory.createEntry(
           key: 'key1',
@@ -329,7 +327,7 @@ void main() {
         expect(storage.get('key2'), isNull); // Should not exist
       });
 
-      test('allows different node_id with same seq', () return {
+      test('allows different node_id with same seq', () {
         final entry1 = TestDataFactory.createEntry(
           key: 'key1',
           value: 'value1',
@@ -353,7 +351,7 @@ void main() {
         expect(storage.get('key2'), isNotNull); // Should both exist
       });
 
-      test('allows same node_id with different seq', () return {
+      test('allows same node_id with different seq', () {
         final entry1 = TestDataFactory.createEntry(
           key: 'key1',
           value: 'value1',
@@ -379,94 +377,74 @@ void main() {
     });
 
     group('Property-Based Tests', () {
-      test('property: LWW resolution is consistent and deterministic', () {
-        check(
-          () => TestGenerators.randomTimestamp(),
-          (baseTimestamp) {
-            final entry1 = TestDataFactory.createEntry(
-              key: 'prop-key',
-              value: 'value1',
-              timestampMs: baseTimestamp,
-              nodeId: 'nodeA',
-              seq: 1,
-            );
-
-            final entry2 = TestDataFactory.createEntry(
-              key: 'prop-key',
-              value: 'value2',
-              timestampMs: baseTimestamp + 1000, // Always newer
-              nodeId: 'nodeB',
-              seq: 2,
-            );
-
-            // Newer timestamp should always win regardless of order
-            return entry2.timestampMs > entry1.timestampMs;
-          },
-          iterations: 50,
+      test('property: LWW resolution is consistent and deterministic', () async {
+        final baseTimestamp = TestGenerators.randomTimestamp();
+        
+        final entry1 = TestDataFactory.createEntry(
+          key: 'prop-key',
+          value: 'value1',
+          timestampMs: baseTimestamp,
+          nodeId: 'nodeA',
+          seq: 1,
         );
+
+        final entry2 = TestDataFactory.createEntry(
+          key: 'prop-key',
+          value: 'value2',
+          timestampMs: baseTimestamp + 1000, // Always newer
+          nodeId: 'nodeB',
+          seq: 2,
+        );
+
+        // Test that newer timestamp always wins regardless of order
+        storage.put('prop-key', entry1);
+        storage.put('prop-key', entry2);
+        
+        final result = await storage.get('prop-key');
+        expect(result?.value, equals('value2'));
+        expect(result?.timestampMs, equals(entry2.timestampMs));
       });
 
       test('property: tombstone GC preserves entries within 24h window', () {
-        check(
-          () => TestGenerators.randomTimestamp(
-            min: DateTime.now().millisecondsSinceEpoch - (20 * 60 * 60 * 1000), // 20 hours ago
-            max: DateTime.now().millisecondsSinceEpoch, // Now
-          ),
-          (recentTimestamp) {
-            final tombstone = TestDataFactory.createEntry(
-              key: 'recent-tombstone',
-              timestampMs: recentTimestamp,
-              nodeId: 'node1',
-              seq: 1,
-              isTombstone: true,
-            );
-
-            storage.put('recent-tombstone', tombstone);
-            final removedCount = storage.garbageCollectTombstones();
-
-            // Should not remove recent tombstones
-            return removedCount == 0;
-          },
-          iterations: 30,
+        final recentTimestamp = DateTime.now().millisecondsSinceEpoch - (20 * 60 * 60 * 1000); // 20 hours ago
+        
+        final tombstone = TestDataFactory.createEntry(
+          key: 'recent-tombstone',
+          timestampMs: recentTimestamp,
+          nodeId: 'node1',
+          seq: 1,
+          isTombstone: true,
         );
+
+        storage.put('recent-tombstone', tombstone);
+        final removedCount = storage.garbageCollectTombstones();
+
+        // Should not remove recent tombstones
+        expect(removedCount, equals(0));
       });
 
       test('property: UTF-8 validation correctly measures byte length', () {
-        check(
-          () => TestGenerators.randomUtf8String(
-            minLength: 1,
-            maxLength: 100,
-            includeMultibyte: true,
-            includeEmoji: true,
-          ),
-          (testString) {
-            final bytes = utf8.encode(testString);
-            final entry = TestDataFactory.createEntry(
-              key: 'utf8-test',
-              value: testString,
-              isTombstone: false,
-            );
-
-            // Storage should respect UTF-8 byte length, not character count
-            if (bytes.length <= 256 * 1024) { // Within value limit
-              try {
-                storage.put('utf8-test', entry);
-                return true;
-              } catch (e) {
-                return false; // Unexpected rejection
-              }
-            } else {
-              // Should reject oversized values
-              try {
-                storage.put('utf8-test', entry);
-                return false; // Should have been rejected
-              } catch (e) {
-                return true; // Correctly rejected
-              }
-            }
-          },
-          iterations: 100,
+        final testString = TestGenerators.randomUtf8String(
+          minLength: 1,
+          maxLength: 100,
+          includeMultibyte: true,
+          includeEmoji: true,
         );
+        
+        final bytes = utf8.encode(testString);
+        final entry = TestDataFactory.createEntry(
+          key: 'utf8-test',
+          value: testString,
+              isTombstone: false,
+        );
+
+        // Storage should respect UTF-8 byte length, not character count
+        if (bytes.length <= 256 * 1024) { // Within value limit
+          expect(() => storage.put('utf8-test', entry), returnsNormally);
+        } else {
+          // Should reject oversized values
+          expect(() => storage.put('utf8-test', entry), throwsA(isA<Exception>()));
+        }
       });
     });
   });

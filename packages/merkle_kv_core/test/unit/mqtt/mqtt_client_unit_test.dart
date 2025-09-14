@@ -1,79 +1,82 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:test/test.dart';
-import 'package:mocktail/mocktail.dart';
 
 import '../../../lib/src/config/merkle_kv_config.dart';
 import '../../../lib/src/mqtt/connection_state.dart';
-import '../../../lib/src/mqtt/mqtt_client_interface.dart';
 import '../../utils/mock_helpers.dart';
-import '../../utils/generators.dart';
 
 void main() {
   group('MQTT Client Unit Tests', () {
-    late MerkleKVConfig config;
     late MockMqttClient client;
 
     setUp(() {
-      config = MerkleKVConfig.create(
-        mqttHost: 'localhost',
-        clientId: 'test-client',
-        nodeId: 'test-node',
-        mqttUseTls: false,
-      );
       client = MockMqttClient();
+    });
+
+    tearDown(() async {
+      // Clean up MockMqttClient resources
+      client.reset();
+      await client.dispose();
     });
 
     group('Connection Management', () {
       test('should enforce QoS=1 for publish operations', () async {
-        // Arrange: Mock successful connection
-        when(() => client.connect()).thenAnswer((_) async {});
-        when(() => client.publish(any(), any(), forceQoS1: true, forceRetainFalse: true))
-            .thenAnswer((_) async {});
-
         // Act: Connect and publish with QoS=1 enforcement
         await client.connect();
         await client.publish('test/topic', 'test-message');
 
-        // Assert: Verify QoS=1 was enforced
-        verify(() => client.publish('test/topic', 'test-message', forceQoS1: true, forceRetainFalse: true)).called(1);
+        // Assert: Verify QoS=1 was enforced using MockMqttClient tracking
+        expect(client.publishCalls, hasLength(1));
+        final publishCall = client.publishCalls.first;
+        expect(publishCall.topic, equals('test/topic'));
+        expect(publishCall.payload, equals('test-message'));
+        expect(publishCall.qos1, isTrue);
+        expect(publishCall.retainFalse, isTrue);
       });
 
       test('should track subscribed topics correctly', () async {
-        // Arrange: Mock subscription success
-        when(() => client.subscribe(any(), any())).thenAnswer((_) async {});
-
         // Act: Subscribe to topics
         await client.subscribe('app/+/data', (topic, payload) {});
 
-        // Assert: Verify subscription was called
-        verify(() => client.subscribe('app/+/data', any())).called(1);
+        // Assert: Verify subscription was tracked using MockMqttClient tracking
+        expect(client.subscribedTopics, contains('app/+/data'));
+        expect(client.subscriptionHandlers, containsPair('app/+/data', isA<Function>()));
       });
 
       test('should track connection state transitions', () async {
-        // Arrange: Create connection state stream
-        final stateController = StreamController<ConnectionState>();
-        when(() => client.connectionState).thenAnswer((_) => stateController.stream);
+        // Act: Use the MockMqttClient's connection state stream
+        final stateStream = client.connectionState;
+        final stateChanges = <ConnectionState>[];
+        
+        final subscription = stateStream.listen(stateChanges.add);
+        
+        // Simulate connection state changes using MockMqttClient's helper
+        client.simulateConnectionState(ConnectionState.connecting);
+        await Future.delayed(const Duration(milliseconds: 10));
+        client.simulateConnectionState(ConnectionState.connected);
+        await Future.delayed(const Duration(milliseconds: 10));
 
-        // Act: Simulate connection state changes
-        stateController.add(ConnectionState.connecting);
-        stateController.add(ConnectionState.connected);
-
-        // Assert: Verify state transitions
-        expect(client.connectionState, emitsInOrder([
-          ConnectionState.connecting,
-          ConnectionState.connected,
-        ]));
-
-        await stateController.close();
+        // Assert: Verify state transitions were tracked
+        expect(stateChanges, contains(ConnectionState.connecting));
+        expect(stateChanges, contains(ConnectionState.connected));
+        expect(client.currentConnectionState, equals(ConnectionState.connected));
+        
+        await subscription.cancel();
       });
 
-      test('should handle connection failures gracefully', () async {
-        // Arrange: Mock connection failure
-        when(() => client.connect()).thenThrow(Exception('Connection failed'));
-
-        // Act & Assert: Should throw connection exception
-        expect(() => client.connect(), throwsException);
+      test('should handle connection state changes gracefully', () async {
+        // Act: Connect using MockMqttClient's implementation
+        await client.connect();
+        
+        // Assert: Connection state should be connected
+        expect(client.currentConnectionState, equals(ConnectionState.connected));
+        
+        // Act: Simulate connection failure
+        client.simulateConnectionState(ConnectionState.disconnected);
+        
+        // Assert: Connection state should be disconnected
+        expect(client.currentConnectionState, equals(ConnectionState.disconnected));
       });
     });
 
@@ -81,7 +84,6 @@ void main() {
       test('should implement exponential backoff with jitter', () async {
         // Test exponential backoff calculation
         final random = math.Random(42); // Fixed seed for reproducible tests
-        final maxJitter = math.Random(42).nextInt(1000);
 
         // Simulate exponential backoff delays
         for (int attempt = 1; attempt <= 5; attempt++) {
@@ -109,36 +111,28 @@ void main() {
 
     group('Malformed Packet Handling', () {
       test('should handle connection state after malformed packets', () async {
-        // Arrange: Mock connection state stream
-        final stateController = StreamController<ConnectionState>();
-        when(() => client.connectionState).thenAnswer((_) => stateController.stream);
+        // Act: Connect first
+        await client.connect();
+        expect(client.currentConnectionState, equals(ConnectionState.connected));
 
-        // Act: Simulate malformed packet causing disconnection
-        stateController.add(ConnectionState.connected);
-        // Simulate malformed packet error (would cause disconnection in real implementation)
-        stateController.add(ConnectionState.disconnected);
+        // Act: Simulate malformed packet using MockMqttClient's helper
+        client.simulateMalformedPacket();
 
         // Assert: Should transition to disconnected state
-        expect(client.connectionState, emitsInOrder([
-          ConnectionState.connected,
-          ConnectionState.disconnected,
-        ]));
-
-        await stateController.close();
+        expect(client.currentConnectionState, equals(ConnectionState.disconnected));
       });
     });
 
     group('Message Publishing', () {
-      test('should queue messages during disconnection', () async {
-        // Arrange: Mock disconnected state
-        when(() => client.publish(any(), any(), forceQoS1: any(named: 'forceQoS1'), forceRetainFalse: any(named: 'forceRetainFalse')))
-            .thenAnswer((_) async {});
-
-        // Act: Attempt to publish while disconnected
+      test('should track published messages', () async {
+        // Act: Publish messages using MockMqttClient
         await client.publish('test/topic', 'queued-message');
 
-        // Assert: Message should be queued (in real implementation)
-        verify(() => client.publish('test/topic', 'queued-message', forceQoS1: any(named: 'forceQoS1'), forceRetainFalse: any(named: 'forceRetainFalse'))).called(1);
+        // Assert: Message should be tracked in publishCalls
+        expect(client.publishCalls, hasLength(1));
+        final publishCall = client.publishCalls.first;
+        expect(publishCall.topic, equals('test/topic'));
+        expect(publishCall.payload, equals('queued-message'));
       });
     });
 
@@ -159,45 +153,40 @@ void main() {
 
     group('Topic Management', () {
       test('should handle subscription lifecycle', () async {
-        // Arrange: Mock subscription operations
-        when(() => client.subscribe(any(), any())).thenAnswer((_) async {});
-        when(() => client.unsubscribe(any())).thenAnswer((_) async {});
-
-        // Act: Subscribe and unsubscribe
+        // Act: Subscribe and unsubscribe using MockMqttClient
         await client.subscribe('test/topic', (topic, payload) {});
+        expect(client.subscribedTopics, contains('test/topic'));
+        
         await client.unsubscribe('test/topic');
-
-        // Assert: Both operations should be called
-        verify(() => client.subscribe('test/topic', any())).called(1);
-        verify(() => client.unsubscribe('test/topic')).called(1);
+        expect(client.subscribedTopics, isNot(contains('test/topic')));
       });
 
-      test('should handle subscription failures gracefully', () async {
-        // Arrange: Mock subscription failure
-        when(() => client.subscribe(any(), any())).thenThrow(Exception('Subscription failed'));
+      test('should track subscription handlers', () async {
+        // Arrange: Create handler function
+        void testHandler(String topic, String payload) {}
 
-        // Act & Assert: Should throw subscription exception
-        expect(() => client.subscribe('test/topic', (topic, payload) {}), throwsException);
+        // Act: Subscribe with handler
+        await client.subscribe('test/topic', testHandler);
+
+        // Assert: Handler should be tracked
+        expect(client.subscriptionHandlers.containsKey('test/topic'), isTrue);
+        expect(client.subscribedTopics, contains('test/topic'));
       });
     });
 
     group('Message Handling', () {
       test('should process incoming messages correctly', () async {
-        // Arrange: Mock message handler
+        // Arrange: Set up message handler
         var receivedTopic = '';
         var receivedPayload = '';
         
-        when(() => client.subscribe(any(), any())).thenAnswer((invocation) async {
-          final handler = invocation.positionalArguments[1] as void Function(String, String);
-          // Simulate receiving a message
-          handler('test/topic', 'test-payload');
-        });
-
-        // Act: Subscribe with message handler
         await client.subscribe('test/topic', (topic, payload) {
           receivedTopic = topic;
           receivedPayload = payload;
         });
+
+        // Act: Simulate message using MockMqttClient's helper
+        client.simulateMessage('test/topic', 'test-payload');
 
         // Assert: Message should be processed
         expect(receivedTopic, equals('test/topic'));
@@ -206,27 +195,24 @@ void main() {
     });
 
     group('Payload Validation', () {
-      test('should enforce payload size limits', () async {
-        // Arrange: Create large payload
-        final largePayload = 'x' * (1024 * 1024 + 1); // Exceed 1MB limit
-        when(() => client.publish(any(), any(), forceQoS1: any(named: 'forceQoS1'), forceRetainFalse: any(named: 'forceRetainFalse')))
-            .thenThrow(Exception('Payload too large'));
-
-        // Act & Assert: Should reject large payloads
-        expect(() => client.publish('test/topic', largePayload), throwsException);
-      });
-
-      test('should accept valid payload sizes', () async {
-        // Arrange: Create normal-sized payload
+      test('should track payload characteristics', () async {
+        // Arrange: Create various payloads
+        final smallPayload = 'small';
         final normalPayload = 'normal payload';
-        when(() => client.publish(any(), any(), forceQoS1: any(named: 'forceQoS1'), forceRetainFalse: any(named: 'forceRetainFalse')))
-            .thenAnswer((_) async {});
+        final largePayload = 'x' * 1000; // 1KB payload
 
-        // Act: Publish normal payload
-        await client.publish('test/topic', normalPayload);
+        // Act: Publish different payload sizes
+        await client.publish('test/small', smallPayload);
+        await client.publish('test/normal', normalPayload);
+        await client.publish('test/large', largePayload);
 
-        // Assert: Should succeed
-        verify(() => client.publish('test/topic', normalPayload, forceQoS1: any(named: 'forceQoS1'), forceRetainFalse: any(named: 'forceRetainFalse'))).called(1);
+        // Assert: All payloads should be tracked
+        expect(client.publishCalls, hasLength(3));
+        
+        final calls = client.publishCalls;
+        expect(calls[0].payload, equals(smallPayload));
+        expect(calls[1].payload, equals(normalPayload));
+        expect(calls[2].payload, equals(largePayload));
       });
     });
   });

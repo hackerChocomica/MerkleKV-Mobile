@@ -14,7 +14,7 @@ class TestTimings {
   static const smallDelay = Duration(milliseconds: 10);
   static const longDelay = Duration(seconds: 15);
   static const shortTimeout = Duration(seconds: 3);
-  static const connectionTimeout = Duration(seconds: 10); // Match client timeout
+  static const connectionTimeout = Duration(seconds: 20); // Match client timeout (updated from 10s to 20s)
   static const timeoutWindow = Duration(seconds: 1);
 }
 
@@ -71,7 +71,7 @@ class MockMqttClient implements MqttClientInterface {
 
   @override
   Future<void> connect() async {
-    print('MockClient connect() called, shouldFailConnection: $shouldFailConnection');
+    // Debug: MockClient connect() called, shouldFailConnection: $shouldFailConnection
     
     // Always emit connecting state first
     setState(ConnectionState.connecting);
@@ -82,13 +82,13 @@ class MockMqttClient implements MqttClientInterface {
     
     if (shouldFailConnection) {
       // Wait a bit then emit disconnected state
-      await Future.delayed(Duration(milliseconds: 20));
+      await Future.delayed(const Duration(milliseconds: 20));
       setState(ConnectionState.disconnected);
       throw connectionException ?? Exception('Connection failed');
     }
     
     // Emit intermediate state change to simulate real MQTT client behavior
-    await Future.delayed(Duration(milliseconds: 20));
+    await Future.delayed(const Duration(milliseconds: 20));
     setState(ConnectionState.connected);
   }
 
@@ -106,7 +106,7 @@ class MockMqttClient implements MqttClientInterface {
     _subscriptions.clear();
     _handlers.clear();
     
-    await Future.delayed(Duration(milliseconds: 10));
+    await Future.delayed(const Duration(milliseconds: 10));
     setState(ConnectionState.disconnected);
   }
 
@@ -192,10 +192,10 @@ void main() {
         mockClient.reset();
         
         // Small delay to allow cleanup completion
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(const Duration(milliseconds: 10));
       } catch (e) {
         // Ensure tearDown doesn't fail tests
-        print('Warning: tearDown cleanup failed: $e');
+        // Note: tearDown cleanup failed - $e
       }
     });
 
@@ -613,7 +613,7 @@ void main() {
         
         // Simulate network interruption
         mockClient.setState(ConnectionState.disconnected);
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(const Duration(milliseconds: 10));
         
         expect(manager.isConnected, isFalse);
       });

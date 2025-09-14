@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:test/test.dart';
 import '../../../lib/src/mqtt/topic_router.dart';
 import '../../../lib/src/mqtt/topic_validator.dart';
-import '../../../lib/src/mqtt/topic_scheme.dart';
 import '../../../lib/src/mqtt/connection_state.dart';
 import '../../../lib/src/config/merkle_kv_config.dart';
 import '../../../lib/src/config/invalid_config_exception.dart';
@@ -29,19 +28,17 @@ void main() {
     tearDown(() async {
       try {
         // Ensure proper disconnection if connected
-        if (mockClient.connectionState != null) {
-          await mockClient.disconnect();
-        }
+        await mockClient.disconnect();
         
         // Dispose resources in proper order
         await router.dispose();
         await mockClient.dispose();
         
         // Small delay to ensure cleanup completion
-        await Future.delayed(Duration(milliseconds: 5));
+        await Future.delayed(const Duration(milliseconds: 5));
       } catch (e) {
         // Ensure tearDown doesn't fail tests
-        print('Warning: tearDown cleanup failed: $e');
+        // Note: Cleanup failed - $e
       }
     });
 
@@ -431,8 +428,6 @@ void main() {
           '/tenant-1/prod',
           '//tenant-1//prod//',
         ];
-
-        final normalizedTopics = <String>[];
 
         for (final prefix in unnormalizedConfigs) {
           expect(
