@@ -6,10 +6,12 @@
 set -euo pipefail
 
 # Configuration
-BROKER_HOST="${MQTT_BROKER_HOST:-localhost}"
-BROKER_PORT="${MQTT_BROKER_PORT:-1883}"
-TIMEOUT_SECONDS="${MQTT_HEALTH_TIMEOUT:-30}"
+# Configuration
+BROKER_HOST="${1:-localhost}"
+BROKER_PORT="${2:-1883}"
+TIMEOUT_SECONDS="${3:-30}"
 RETRY_INTERVAL=2
+MQTT_TIMEOUT=15  # Timeout for individual MQTT operations
 
 # Colors for output
 RED='\033[0;31m'
@@ -78,79 +80,83 @@ wait_for_port() {
     done
     
     log_error "MQTT broker port ${BROKER_PORT} failed to open after ${TIMEOUT_SECONDS} seconds"
+    
+    # Additional debugging for CI
+    log_info "Debugging information:"
+    netstat -ln | grep ":${BROKER_PORT}" || log_info "No process listening on port ${BROKER_PORT}"
+    docker ps | grep mosquitto || log_info "No mosquitto containers running"
+    
     return 1
 }
 
-# Test basic MQTT connectivity
+# Test basic MQTT connectivity with extended timeout
 test_mqtt_connection() {
-    log_info "Testing MQTT broker connectivity..."
+    log_info "Testing MQTT publish/subscribe functionality..."
     
-    local test_topic="test/health_check/$(date +%s)"
+    local test_topic="health_check/test_$$"
     local test_message="health_check_$(date +%s)"
-    local received_file="/tmp/mqtt_health_received_$$"
+    local temp_file="/tmp/mqtt_test_$$"
     
-    # Clean up any existing temp files
-    rm -f "$received_file"
+    # Clear temp file
+    > "$temp_file"
     
-    # Start subscriber in background with timeout
-    log_info "Starting MQTT subscriber for health check..."
-    timeout 10s mosquitto_sub \
-        -h "$BROKER_HOST" \
-        -p "$BROKER_PORT" \
-        -t "$test_topic" \
-        -C 1 \
-        > "$received_file" 2>/dev/null &
-    
+    # Start subscriber in background with extended timeout
+    log_info "Starting MQTT subscriber..."
+    timeout ${MQTT_TIMEOUT}s mosquitto_sub -h "$BROKER_HOST" -p "$BROKER_PORT" -t "$test_topic" -q 1 -C 1 > "$temp_file" &
     local sub_pid=$!
     
-    # Give subscriber time to connect
+    # Wait a moment for subscriber to connect
     sleep 2
+    
+    # Check if subscriber is still running
+    if ! kill -0 $sub_pid 2>/dev/null; then
+        log_error "MQTT subscriber failed to start or connect"
+        rm -f "$temp_file"
+        return 1
+    fi
     
     # Publish test message
     log_info "Publishing test message..."
-    if mosquitto_pub \
-        -h "$BROKER_HOST" \
-        -p "$BROKER_PORT" \
-        -t "$test_topic" \
-        -m "$test_message" \
-        --qos 0 2>/dev/null; then
-        log_success "Message published successfully"
-    else
-        log_error "Failed to publish test message"
+    if ! timeout ${MQTT_TIMEOUT}s mosquitto_pub -h "$BROKER_HOST" -p "$BROKER_PORT" -t "$test_topic" -m "$test_message" -q 1; then
+        log_error "Failed to publish MQTT message"
         kill $sub_pid 2>/dev/null || true
-        rm -f "$received_file"
+        rm -f "$temp_file"
         return 1
     fi
     
     # Wait for subscriber to receive message
     local wait_count=0
     while [ $wait_count -lt 10 ] && kill -0 $sub_pid 2>/dev/null; do
-        if [ -f "$received_file" ] && [ -s "$received_file" ]; then
+        if [ -s "$temp_file" ]; then
             break
         fi
         sleep 0.5
         wait_count=$((wait_count + 1))
     done
     
+    # Stop subscriber
+    kill $sub_pid 2>/dev/null || true
+    wait $sub_pid 2>/dev/null || true
+    
     # Check if message was received
-    if [ -f "$received_file" ] && [ -s "$received_file" ]; then
-        local received_message=$(cat "$received_file")
+    if [ -s "$temp_file" ]; then
+        local received_message=$(cat "$temp_file" | tr -d '\n')
         if [ "$received_message" = "$test_message" ]; then
-            log_success "MQTT publish/subscribe test passed"
-            rm -f "$received_file"
+            log_success "MQTT publish/subscribe test successful"
+            rm -f "$temp_file"
             return 0
         else
-            log_error "Received message doesn't match sent message"
-            log_error "Sent: '$test_message', Received: '$received_message'"
+            log_error "MQTT message mismatch. Expected: '$test_message', Got: '$received_message'"
+            rm -f "$temp_file"
+            return 1
         fi
     else
-        log_error "No message received within timeout period"
+        log_error "MQTT subscriber did not receive message within timeout"
+        log_info "Debugging: temp_file content:"
+        cat "$temp_file" || log_info "temp_file is empty or missing"
+        rm -f "$temp_file"
+        return 1
     fi
-    
-    # Cleanup
-    kill $sub_pid 2>/dev/null || true
-    rm -f "$received_file"
-    return 1
 }
 
 # Test QoS 1 functionality
