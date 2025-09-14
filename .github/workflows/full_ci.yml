@@ -263,6 +263,14 @@ jobs:
         ports:
           - 1883:1883
           - 9001:9001
+        volumes:
+          - ${{ github.workspace }}/broker/mosquitto/config/mosquitto-test.conf:/mosquitto/config/mosquitto.conf:ro
+        options: >-
+          --health-cmd "mosquitto_pub -h localhost -p 1883 -t health/check -m test --qos 0"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 10s
         
     steps:
       - name: 📚 Checkout Repository
@@ -298,10 +306,31 @@ jobs:
           melos bootstrap --verbose
           
       # -----------------------------------------------------------------------
-      # MQTT Broker Validation for Integration Tests
+      # MQTT Broker Health Check for Integration Tests
       # -----------------------------------------------------------------------
-      # Ensures service container is operational before proceeding with
-      # integration tests that depend on MQTT communication functionality
+      # Ensures service container is operational and validates MQTT functionality
+      # before proceeding with tests that depend on MQTT communication
+      #
+      - name: 🔌 MQTT Broker Health Check (Integration Tier)
+        if: matrix.tier == 'integration'
+        run: |
+          echo "Running comprehensive MQTT broker health check..."
+          
+          # Make health check script executable
+          chmod +x ./scripts/mqtt_health_check.sh
+          
+          # Run health check with environment variables
+          MQTT_BROKER_HOST=localhost \
+          MQTT_BROKER_PORT=1883 \
+          MQTT_HEALTH_TIMEOUT=60 \
+          ./scripts/mqtt_health_check.sh
+          
+          echo "✅ MQTT broker health check completed successfully"
+          
+      # -----------------------------------------------------------------------
+      # MQTT Broker Validation for Integration Tests (Legacy)
+      # -----------------------------------------------------------------------
+      # Legacy validation kept for compatibility and additional verification
       #
       - name: 🔌 Validate MQTT Broker (Integration Tier)
         if: matrix.tier == 'integration'

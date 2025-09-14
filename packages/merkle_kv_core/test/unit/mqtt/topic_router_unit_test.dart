@@ -27,8 +27,22 @@ void main() {
     });
 
     tearDown(() async {
-      await router.dispose();
-      await mockClient.dispose();
+      try {
+        // Ensure proper disconnection if connected
+        if (mockClient.connectionState != null) {
+          await mockClient.disconnect();
+        }
+        
+        // Dispose resources in proper order
+        await router.dispose();
+        await mockClient.dispose();
+        
+        // Small delay to ensure cleanup completion
+        await Future.delayed(Duration(milliseconds: 5));
+      } catch (e) {
+        // Ensure tearDown doesn't fail tests
+        print('Warning: tearDown cleanup failed: $e');
+      }
     });
 
     group('Canonical Topic Generation', () {

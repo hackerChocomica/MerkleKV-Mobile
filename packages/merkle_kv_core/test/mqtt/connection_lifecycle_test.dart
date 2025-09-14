@@ -14,6 +14,7 @@ class TestTimings {
   static const smallDelay = Duration(milliseconds: 10);
   static const longDelay = Duration(seconds: 15);
   static const shortTimeout = Duration(seconds: 3);
+  static const connectionTimeout = Duration(seconds: 10); // Match client timeout
   static const timeoutWindow = Duration(seconds: 1);
 }
 
@@ -177,8 +178,25 @@ void main() {
     });
 
     tearDown(() async {
-      await manager.dispose();
-      mockClient.dispose();
+      try {
+        // Ensure proper disconnection before disposal
+        if (manager.isConnected) {
+          await manager.disconnect(suppressLWT: true);
+        }
+        
+        // Dispose resources in proper order
+        await manager.dispose();
+        mockClient.dispose();
+        
+        // Reset mock state for next test
+        mockClient.reset();
+        
+        // Small delay to allow cleanup completion
+        await Future.delayed(Duration(milliseconds: 10));
+      } catch (e) {
+        // Ensure tearDown doesn't fail tests
+        print('Warning: tearDown cleanup failed: $e');
+      }
     });
 
     group('Connection establishment', () {

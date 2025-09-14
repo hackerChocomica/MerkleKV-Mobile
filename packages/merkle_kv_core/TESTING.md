@@ -1,10 +1,84 @@
 # Comprehensive Testing Guide for MerkleKV-Mobile
 
-This document outlines the comprehensive testing strategy for MerkleKV-Mobile, covering unit tests, integration tests, and property-based testing approaches.
+This document outlines the comprehensive testing strategy for MerkleKV-Mobile, covering unit tests, integration tests, and property-based testing approaches with MQTT timeout fixes and broker configuration.
 
 ## Overview
 
 The MerkleKV-Mobile testing suite implements comprehensive unit testing for all critical components with >95% code coverage targets. The testing strategy emphasizes negative testing, edge cases, and property-based validation to ensure robustness in distributed environments.
+
+## 🔧 Test Environment Setup
+
+### MQTT Broker Configuration
+
+The test suite requires a properly configured MQTT broker. We provide two configurations:
+
+#### Production Configuration
+- **File**: `broker/mosquitto/config/mosquitto.conf`
+- **Features**: TLS, authentication, ACL
+- **Use**: Production deployment
+
+#### Test Configuration  
+- **File**: `broker/mosquitto/config/mosquitto-test.conf`
+- **Features**: Anonymous access, optimized for testing
+- **Use**: CI/CD and local testing
+
+#### Running Test Broker
+
+```bash
+# Using Docker with test configuration
+cd broker/mosquitto
+docker run -it --rm \
+  -p 1883:1883 \
+  -v $(pwd)/config/mosquitto-test.conf:/mosquitto/config/mosquitto.conf:ro \
+  eclipse-mosquitto:1.6
+
+# Or using docker-compose with test override
+docker-compose -f docker-compose.yml -f docker-compose.test.yml up
+```
+
+### MQTT Connection Timeout Configuration
+
+The MQTT client has been configured with appropriate timeouts for reliable testing:
+
+- **Connection Timeout**: 10 seconds (increased from 2s default)
+- **Keepalive Period**: 30 seconds for tests
+- **Retry Interval**: 2 seconds for faster test cycles
+
+### Health Check
+
+Before running integration tests, validate broker availability:
+
+```bash
+# Run comprehensive health check
+./scripts/mqtt_health_check.sh
+
+# With custom parameters
+MQTT_BROKER_HOST=localhost \
+MQTT_BROKER_PORT=1883 \
+MQTT_HEALTH_TIMEOUT=30 \
+./scripts/mqtt_health_check.sh
+```
+
+The health check script validates:
+- TCP port availability
+- Basic MQTT publish/subscribe functionality  
+- QoS 1 message delivery
+- Connection timing and reliability
+
+### Dependencies
+
+Ensure you have the following dependencies installed:
+
+```bash
+# Dart SDK 3.9.3 or later
+dart --version
+
+# Flutter SDK (for Flutter packages)
+flutter --version
+
+# Install test dependencies
+dart pub get
+```
 
 ## Testing Architecture
 
