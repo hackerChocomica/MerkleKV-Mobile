@@ -370,10 +370,21 @@ jobs:
             if nc -z localhost 1883; then
               echo "✅ TCP connection successful"
               
-              # Test MQTT connection with timeout
-              if timeout 5s mosquitto_pub -h localhost -p 1883 -t "health/check" -m "test" --qos 0 2>/dev/null; then
-                echo "✅ MQTT broker is ready and accepting connections!"
-                break
+              # Test MQTT connection with extended timeout and better validation
+              if timeout 15s mosquitto_pub -h localhost -p 1883 -t "health/check" -m "test" --qos 0 2>/dev/null; then
+                echo "✅ MQTT publish successful"
+                
+                # Also test subscribe to ensure full broker functionality
+                if timeout 10s bash -c 'mosquitto_sub -h localhost -p 1883 -t "health/check" -C 1 >/dev/null 2>&1 &
+                SUB_PID=$!
+                sleep 1
+                mosquitto_pub -h localhost -p 1883 -t "health/check" -m "ready" --qos 0
+                wait $SUB_PID'; then
+                  echo "✅ MQTT broker is ready and accepting connections!"
+                  break
+                else
+                  echo "⏳ MQTT publish works but subscribe/publish cycle failed..."
+                fi
               else
                 echo "⏳ MQTT broker not ready for messaging yet..."
               fi
