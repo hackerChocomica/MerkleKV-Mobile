@@ -237,26 +237,32 @@ void main() {
       test('topics within 100 UTF-8 byte limit are accepted', () {
         // Test various topic lengths under the limit
         final validCases = [
-          ('short', 'c', 'cmd'), // Very short
-          ('medium/length/prefix', 'client-123', 'cmd'), // Medium
-          ('x' * 30, 'y' * 30, 'cmd'), // Near limit but valid
+          ('short', 'c'),              // Very short: 5+1+1+1+3 = 11 bytes
+          ('medium/length', 'client'), // Medium: 13+1+6+1+3 = 24 bytes  
+          ('x' * 30, 'y' * 20),       // Near limit: 30+1+20+1+3 = 55 bytes
+          ('x' * 45, 'y' * 15),       // At prefix limit: 45+1+15+1+3 = 65 bytes
         ];
 
-        for (final (prefix, clientId, suffix) in validCases) {
-          final topic = '$prefix/$clientId/$suffix';
-          final bytes = utf8.encode(topic);
-          
-          if (bytes.length <= 100) {
-            expect(() => TopicValidator.validatePrefix(prefix), returnsNormally);
-            expect(() => TopicValidator.validateClientId(clientId), returnsNormally);
-          }
+        for (final (prefix, clientId) in validCases) {
+          expect(
+            () => MerkleKVConfig(
+              mqttHost: 'localhost',
+              clientId: clientId,
+              nodeId: 'test-node',
+              topicPrefix: prefix,
+            ),
+            returnsNormally,
+          );
         }
       });
 
       test('topics exceeding 100 UTF-8 byte limit are rejected', () {
-        // Create topic that exceeds 100 bytes
-        final longPrefix = 'x' * 60;
-        final longClientId = 'y' * 40;
+        // Create topic that exceeds 100 bytes total but prefix ≤ 50 bytes
+        // prefix=45 bytes + clientId=50 bytes + '/cmd' = 45+1+50+1+3 = 100 bytes (at limit)
+        // Use 46+50 = 101 bytes total to exceed limit
+        final longPrefix = 'x' * 46;    // 46 bytes (under 50 byte prefix limit)
+        final longClientId = 'y' * 50;  // 50 bytes
+        // Total topic: 46 + 1 + 50 + 1 + 3 = 101 bytes (exceeds 100 byte limit)
         
         expect(
           () => MerkleKVConfig(
@@ -271,10 +277,23 @@ void main() {
 
       test('UTF-8 multibyte characters are counted correctly in topic length', () {
         // Each emoji is 4 bytes in UTF-8
-        final emojiPrefix = '🚀' * 15; // 15 * 4 = 60 bytes
+        // Prefix limit is 50 bytes, so use 12 * 4 = 48 bytes (under 50)
+        final emojiPrefix = '🚀' * 12; // 12 * 4 = 48 bytes (under 50 byte limit)
         final emojiClient = '⚡' * 8; // 8 * 4 = 32 bytes
-        // Total: 60 + 1 + 32 + 1 + 3 = 97 bytes (under 100)
+        // Total topic: 48 + 1 + 32 + 1 + 3 = 85 bytes (under 100)
         
+        // This should be valid since prefix ≤50 bytes and total topic ≤100 bytes
+        expect(
+          () => MerkleKVConfig(
+            mqttHost: 'localhost',
+            clientId: emojiClient,
+            nodeId: 'test-node',
+            topicPrefix: emojiPrefix,
+          ),
+          returnsNormally,
+        );
+        
+        // Verify the constructed topic is within limits
         final topic = '$emojiPrefix/$emojiClient/cmd';
         TestAssertions.assertUtf8ByteLength(topic, 100);
       });
@@ -422,14 +441,34 @@ void main() {
       });
 
       test('prefix normalization maintains isolation', () {
-        final unnormalizedConfigs = [
-          '  tenant-1/prod  ',
-          'tenant-1/prod/',
-          '/tenant-1/prod',
-          '//tenant-1//prod//',
+        // These prefixes normalize successfully and should be accepted
+        final validUnnormalizedPrefixes = [
+          '  tenant-1/prod  ',   // Normalizes to 'tenant-1/prod'
+          'tenant-1/prod/',      // Normalizes to 'tenant-1/prod'
+          '/tenant-1/prod',      // Normalizes to 'tenant-1/prod'
         ];
 
-        for (final prefix in unnormalizedConfigs) {
+        for (final prefix in validUnnormalizedPrefixes) {
+          expect(
+            () => MerkleKVConfig(
+              mqttHost: 'localhost',
+              clientId: 'test-client',
+              nodeId: 'test-node',
+              topicPrefix: prefix,
+            ),
+            returnsNormally,
+          );
+        }
+
+        // These prefixes should fail validation even after normalization
+        final invalidPrefixes = [
+          '//tenant-1//prod//',  // Normalizes to 'tenant-1//prod' (double slashes invalid)
+          '   ',                 // Normalizes to empty string, uses default 'mkv'
+          'tenant+wildcard',     // Contains MQTT wildcard '+'
+          'tenant#wildcard',     // Contains MQTT wildcard '#'
+        ];
+
+        for (final prefix in invalidPrefixes) {
           expect(
             () => MerkleKVConfig(
               mqttHost: 'localhost',

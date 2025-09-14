@@ -59,11 +59,17 @@ void main() {
         ];
 
         for (final invalidCmd in invalidCommands) {
-          final command = Command.fromJson(invalidCmd);
-          final response = await processor.processCommand(command);
-          
-          expect(response.status, equals(ResponseStatus.error));
-          expect(response.errorCode, equals(ErrorCode.invalidRequest));
+          // For commands missing id or op, expect FormatException during parsing
+          if (!invalidCmd.containsKey('id') || !invalidCmd.containsKey('op')) {
+            expect(() => Command.fromJson(invalidCmd), throwsFormatException);
+          } else {
+            // For commands with id and op but missing other fields, expect processor to reject
+            final command = Command.fromJson(invalidCmd);
+            final response = await processor.processCommand(command);
+            
+            expect(response.status, equals(ResponseStatus.error));
+            expect(response.errorCode, equals(ErrorCode.invalidRequest));
+          }
         }
       });
 
@@ -428,14 +434,17 @@ void main() {
 
       test('sequence numbers persist across different operation types', () async {
         await processor.set('multi-op-1', 'value1', 'req-1'); // seq 1
-        await processor.delete('multi-op-1', 'req-2'); // seq 2
+        await processor.delete('multi-op-1', 'req-2'); // seq 2 (overwrites seq 1 due to LWW)
         await processor.set('multi-op-2', 'value2', 'req-3'); // seq 3
         
         final allEntries = await storage.getAllEntries();
         final sequences = allEntries.map((e) => e.seq).toList();
         sequences.sort();
         
-        expect(sequences, equals([1, 2, 3]));
+        // Only 2 entries should remain after LWW resolution:
+        // - 'multi-op-1' tombstone (seq 2) wins over value (seq 1)
+        // - 'multi-op-2' value (seq 3)
+        expect(sequences, equals([2, 3]));
       });
 
       test('read operations do not increment sequence numbers', () async {

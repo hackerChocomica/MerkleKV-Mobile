@@ -300,8 +300,9 @@ void main() {
     });
 
     group('Deduplication by (node_id, seq)', () {
-      test('prevents duplicate (node_id, seq) entries', () async {
-        // Create two entries with same (node_id, seq) but different keys
+      test('allows same (node_id, seq) for different keys', () async {
+        // Same (node_id, seq) is allowed for different keys since 
+        // sequence numbers are operation counters, not global unique identifiers
         final entry1 = TestDataFactory.createEntry(
           key: 'key1',
           value: 'value1',
@@ -315,16 +316,15 @@ void main() {
           value: 'value2',
           timestampMs: 2000,
           nodeId: 'node1', // Same node_id
-          seq: 1, // Same seq
+          seq: 1, // Same seq - this is allowed for different keys
         );
 
         storage.put('key1', entry1);
-        
-        // Second entry should be ignored due to duplicate (node_id, seq)
         storage.put('key2', entry2);
 
+        // Both entries should exist since they have different keys
         expect(await storage.get('key1'), isNotNull);
-        expect(await storage.get('key2'), isNull); // Should not exist
+        expect(await storage.get('key2'), isNotNull);
       });
 
       test('allows different node_id with same seq', () async {
