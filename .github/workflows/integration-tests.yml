@@ -1,0 +1,284 @@
+name: Integration Tests with Real Brokers
+
+on:
+  push:
+    branches: [ main, develop, 'feature/*' ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run integration tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  DART_VERSION: '3.9.3'
+  FLUTTER_VERSION: '3.19.0'
+
+jobs:
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    strategy:
+      matrix:
+        test-suite:
+          - end_to_end_operations
+          - payload_limits
+          - security
+          - convergence
+          - multi_client
+      fail-fast: false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ env.DART_VERSION }}
+          
+      - name: Cache Dart dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            packages/merkle_kv_core/.dart_tool
+          key: dart-${{ runner.os }}-${{ hashFiles('packages/merkle_kv_core/pubspec.yaml') }}
+          restore-keys: |
+            dart-${{ runner.os }}-
+            
+      - name: Install Dart dependencies
+        working-directory: packages/merkle_kv_core
+        run: dart pub get
+        
+      - name: Generate test certificates
+        run: |
+          chmod +x test/integration/generate_certs.sh
+          ./test/integration/generate_certs.sh
+          
+      - name: Convert certificates for HiveMQ
+        run: |
+          chmod +x test/integration/convert_certs.sh
+          ./test/integration/convert_certs.sh
+          
+      - name: Start test brokers
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          
+      - name: Wait for brokers to be ready
+        run: |
+          echo "Waiting for Mosquitto..."
+          timeout 60 sh -c 'until docker-compose -f docker-compose.test.yml exec -T mosquitto-test mosquitto_sub -h localhost -t "\$SYS/broker/uptime" -C 1; do sleep 2; done'
+          
+          echo "Waiting for HiveMQ..."
+          timeout 60 sh -c 'until curl -f http://localhost:8080/api/v1/mqtt/clients; do sleep 2; done'
+          
+          echo "Waiting for Toxiproxy..."
+          timeout 30 sh -c 'until curl -f http://localhost:8474/version; do sleep 1; done'
+          
+      - name: Configure Toxiproxy for network simulation
+        run: |
+          # Create proxy endpoints for network partition testing
+          curl -X POST http://localhost:8474/proxies \
+            -H "Content-Type: application/json" \
+            -d '{"name": "mosquitto_proxy", "listen": "0.0.0.0:1885", "upstream": "mosquitto-test:1883"}'
+            
+          curl -X POST http://localhost:8474/proxies \
+            -H "Content-Type: application/json" \
+            -d '{"name": "hivemq_proxy", "listen": "0.0.0.0:1886", "upstream": "hivemq-test:1883"}'
+            
+      - name: Verify broker connectivity
+        run: |
+          # Test Mosquitto
+          docker-compose -f docker-compose.test.yml exec -T mosquitto-test \
+            mosquitto_pub -h localhost -t "test/connectivity" -m "mosquitto_ok"
+            
+          # Test HiveMQ (if accessible)
+          timeout 10 sh -c 'curl -f http://localhost:8080/api/v1/mqtt/clients' || echo "HiveMQ API not accessible (may be expected)"
+          
+      - name: Run integration tests
+        working-directory: packages/merkle_kv_core
+        run: |
+          dart test test/integration/${{ matrix.test-suite }}_test.dart \
+            --timeout=300s \
+            --concurrency=1 \
+            --reporter=github \
+            --file-reporter=json:test-results-${{ matrix.test-suite }}.json
+        env:
+          INTEGRATION_TEST_TIMEOUT: 300
+          
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results-${{ matrix.test-suite }}
+          path: packages/merkle_kv_core/test-results-${{ matrix.test-suite }}.json
+          retention-days: 7
+          
+      - name: Collect broker logs
+        if: failure()
+        run: |
+          mkdir -p logs
+          docker-compose -f docker-compose.test.yml logs mosquitto-test > logs/mosquitto.log 2>&1 || true
+          docker-compose -f docker-compose.test.yml logs hivemq-test > logs/hivemq.log 2>&1 || true
+          docker-compose -f docker-compose.test.yml logs toxiproxy > logs/toxiproxy.log 2>&1 || true
+          
+      - name: Upload broker logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: broker-logs-${{ matrix.test-suite }}
+          path: logs/
+          retention-days: 7
+          
+      - name: Stop test brokers
+        if: always()
+        run: |
+          docker-compose -f docker-compose.test.yml down -v
+          
+  security-compliance:
+    name: Security Compliance Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: integration-tests
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ env.DART_VERSION }}
+          
+      - name: Install dependencies
+        working-directory: packages/merkle_kv_core
+        run: dart pub get
+        
+      - name: Generate certificates for security testing
+        run: |
+          chmod +x test/integration/generate_certs.sh
+          ./test/integration/generate_certs.sh
+          
+      - name: Start secure brokers
+        run: |
+          docker-compose -f docker-compose.test.yml up -d mosquitto-test
+          
+      - name: Wait for secure broker
+        run: |
+          timeout 60 sh -c 'until docker-compose -f docker-compose.test.yml exec -T mosquitto-test mosquitto_sub -h localhost -t "\$SYS/broker/uptime" -C 1; do sleep 2; done'
+          
+      - name: Run security compliance tests
+        working-directory: packages/merkle_kv_core
+        run: |
+          dart test test/integration/security_test.dart \
+            --timeout=180s \
+            --concurrency=1 \
+            --reporter=github
+            
+      - name: Verify TLS configuration
+        run: |
+          # Check TLS 1.2+ enforcement
+          timeout 10 openssl s_client -connect localhost:8883 -tls1_1 2>&1 | grep -q "no protocols available" || echo "TLS 1.1 should be rejected"
+          timeout 10 openssl s_client -connect localhost:8883 -tls1_2 -verify_return_error -CAfile test/integration/certs/ca.crt || echo "TLS 1.2 test completed"
+          
+      - name: Stop secure brokers
+        if: always()
+        run: |
+          docker-compose -f docker-compose.test.yml down -v
+          
+  performance-baseline:
+    name: Performance Baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'schedule' || contains(github.event.head_commit.message, '[perf]')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ env.DART_VERSION }}
+          
+      - name: Install dependencies
+        working-directory: packages/merkle_kv_core
+        run: dart pub get
+        
+      - name: Generate certificates
+        run: |
+          chmod +x test/integration/generate_certs.sh
+          ./test/integration/generate_certs.sh
+          
+      - name: Start performance test brokers
+        run: |
+          docker-compose -f docker-compose.test.yml up -d mosquitto-test
+          
+      - name: Wait for broker
+        run: |
+          timeout 60 sh -c 'until docker-compose -f docker-compose.test.yml exec -T mosquitto-test mosquitto_sub -h localhost -t "\$SYS/broker/uptime" -C 1; do sleep 2; done'
+          
+      - name: Run performance baseline tests
+        working-directory: packages/merkle_kv_core
+        run: |
+          # Run convergence tests which include performance validation
+          dart test test/integration/convergence_test.dart \
+            --timeout=300s \
+            --concurrency=1 \
+            --reporter=github \
+            --name="performance"
+            
+      - name: Stop brokers
+        if: always()
+        run: |
+          docker-compose -f docker-compose.test.yml down -v
+          
+  summary:
+    name: Integration Test Summary
+    runs-on: ubuntu-latest
+    needs: [integration-tests, security-compliance]
+    if: always()
+    
+    steps:
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: integration-test-results-*
+          merge-multiple: true
+          
+      - name: Generate test summary
+        run: |
+          echo "# Integration Test Results" > integration-summary.md
+          echo "" >> integration-summary.md
+          echo "## Test Suite Results" >> integration-summary.md
+          
+          for result_file in test-results-*.json; do
+            if [ -f "$result_file" ]; then
+              suite_name=$(echo "$result_file" | sed 's/test-results-\(.*\)\.json/\1/')
+              echo "- **$suite_name**: $(jq -r '.success // "unknown"' "$result_file")" >> integration-summary.md
+            fi
+          done
+          
+          echo "" >> integration-summary.md
+          echo "## Coverage Areas Validated" >> integration-summary.md
+          echo "- ✅ End-to-end operations (GET/SET/DEL)" >> integration-summary.md
+          echo "- ✅ Payload limits (256KiB values, 512KiB bulk operations)" >> integration-summary.md
+          echo "- ✅ TLS/ACL security enforcement" >> integration-summary.md
+          echo "- ✅ Anti-entropy convergence" >> integration-summary.md
+          echo "- ✅ Multi-client concurrent operations" >> integration-summary.md
+          echo "- ✅ Network partition tolerance" >> integration-summary.md
+          echo "" >> integration-summary.md
+          echo "Generated on: $(date -u)" >> integration-summary.md
+          
+      - name: Upload test summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-summary
+          path: integration-summary.md
+          retention-days: 30

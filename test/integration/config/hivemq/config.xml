@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hivemq>
+    <!-- HiveMQ Configuration for Integration Testing -->
+    
+    <!-- General Configuration -->
+    <general>
+        <hostname>hivemq-test</hostname>
+        <update-check-enabled>false</update-check-enabled>
+    </general>
+    
+    <!-- MQTT Listeners -->
+    <listeners>
+        <!-- Plain MQTT -->
+        <tcp-listener>
+            <port>1883</port>
+            <bind-address>0.0.0.0</bind-address>
+            <name>mqtt-tcp-1883</name>
+        </tcp-listener>
+        
+        <!-- TLS MQTT -->
+        <tls-tcp-listener>
+            <port>8883</port>
+            <bind-address>0.0.0.0</bind-address>
+            <name>mqtt-tls-8883</name>
+            <tls>
+                <keystore>
+                    <path>/opt/hivemq/conf/tls/server.p12</path>
+                    <password>hivemq</password>
+                    <private-key-password>hivemq</private-key-password>
+                </keystore>
+                <truststore>
+                    <path>/opt/hivemq/conf/tls/ca.p12</path>
+                    <password>hivemq</password>
+                </truststore>
+                <client-authentication-mode>REQUIRED</client-authentication-mode>
+                <protocols>
+                    <protocol>TLSv1.2</protocol>
+                    <protocol>TLSv1.3</protocol>
+                </protocols>
+            </tls>
+        </tls-tcp-listener>
+    </listeners>
+    
+    <!-- MQTT Configuration -->
+    <mqtt>
+        <message-expiry>
+            <max-interval>4294967296</max-interval>
+        </message-expiry>
+        
+        <!-- Message size limits aligned with Locked Spec -->
+        <message-size>
+            <max-packet-size>1048576</max-packet-size> <!-- 1MB -->
+        </message-size>
+        
+        <server-identifier>hivemq-integration-test</server-identifier>
+        
+        <keep-alive>
+            <max-keep-alive>65535</max-keep-alive>
+            <allow-unlimited>true</allow-unlimited>
+        </keep-alive>
+        
+        <session-expiry>
+            <max-interval>4294967295</max-interval>
+        </session-expiry>
+        
+        <topic-alias>
+            <enabled>true</enabled>
+            <max-per-client>5</max-per-client>
+        </topic-alias>
+        
+        <wildcard-subscriptions>
+            <enabled>true</enabled>
+        </wildcard-subscriptions>
+        
+        <shared-subscriptions>
+            <enabled>true</enabled>
+        </shared-subscriptions>
+    </mqtt>
+    
+    <!-- Security Configuration -->
+    <security>
+        <!-- Allow anonymous for basic tests -->
+        <allow-empty-client-id>true</allow-empty-client-id>
+        <payload-format-validation>false</payload-format-validation>
+        <utf8-validation>true</utf8-validation>
+        <allow-request-problem-information>true</allow-request-problem-information>
+    </security>
+    
+    <!-- Persistence Configuration -->
+    <persistence>
+        <mode>file</mode>
+        <startup-write-delay>0</startup-write-delay>
+    </persistence>
+    
+    <!-- Control Center (disabled for testing) -->
+    <control-center>
+        <enabled>false</enabled>
+    </control-center>
+    
+    <!-- API (disabled for testing) -->
+    <api>
+        <enabled>false</enabled>
+    </api>
+    
+    <!-- Health API (for healthchecks) -->
+    <health-api>
+        <enabled>true</enabled>
+        <listeners>
+            <http>
+                <port>8080</port>
+                <bind-address>0.0.0.0</bind-address>
+            </http>
+        </listeners>
+    </health-api>
+    
+    <!-- Restrictions -->
+    <restrictions>
+        <max-connections>1000</max-connections>
+        <max-client-id-length>65535</max-client-id-length>
+        <max-topic-length>65535</max-topic-length>
+        <max-quality-of-service>2</max-quality-of-service>
+    </restrictions>
+</hivemq>
