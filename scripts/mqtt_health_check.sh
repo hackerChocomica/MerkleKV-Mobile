@@ -1,258 +1,224 @@
-#!/bin/bash
-
+#!/usr/bin/env bash
 # MQTT Broker Health Check Script
-# Validates MQTT broker availability and basic functionality before running tests
+# Validates broker availability and basic MQTT functionality (pub/sub, QoS1).
+# Usage:
+#   ./mqtt_health_check.sh [HOST] [PORT] [TIMEOUT_SECONDS]
+# Env overrides (take precedence over args):
+#   MQTT_BROKER_HOST, MQTT_BROKER_PORT, MQTT_HEALTH_TIMEOUT
 
 set -euo pipefail
 
-# Configuration
-# Configuration
-BROKER_HOST="${1:-localhost}"
-BROKER_PORT="${2:-1883}"
-TIMEOUT_SECONDS="${3:-30}"
+# ----------------------------
+# Configuration (env > args > defaults)
+# ----------------------------
+BROKER_HOST="${MQTT_BROKER_HOST:-${1:-localhost}}"
+BROKER_PORT="${MQTT_BROKER_PORT:-${2:-1883}}"
+TIMEOUT_SECONDS="${MQTT_HEALTH_TIMEOUT:-${3:-30}}"
 RETRY_INTERVAL=2
 MQTT_TIMEOUT=15  # Timeout for individual MQTT operations
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# ----------------------------
+# Pretty logging
+# ----------------------------
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+log_info()    { echo -e "${BLUE}[INFO]${NC} $*"; }
+log_ok()      { echo -e "${GREEN}[OK]${NC} $*"; }
+log_warn()    { echo -e "${YELLOW}[WARN]${NC} $*"; }
+log_err()     { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Check if required tools are available
+# ----------------------------
+# Prerequisites
+# ----------------------------
 check_prerequisites() {
-    log_info "Checking prerequisites..."
-    
-    if ! command -v nc &> /dev/null; then
-        log_error "netcat (nc) is required but not installed"
-        return 1
-    fi
-    
-    if ! command -v mosquitto_pub &> /dev/null || ! command -v mosquitto_sub &> /dev/null; then
-        log_warning "mosquitto-clients not found, installing..."
-        if command -v apt-get &> /dev/null; then
-            sudo apt-get update -qq && sudo apt-get install -y mosquitto-clients
-        elif command -v yum &> /dev/null; then
-            sudo yum install -y mosquitto
-        elif command -v brew &> /dev/null; then
-            brew install mosquitto
-        else
-            log_error "Cannot install mosquitto-clients automatically"
-            return 1
-        fi
-    fi
-    
-    log_success "Prerequisites check passed"
-}
-
-# Wait for TCP port to be available
-wait_for_port() {
-    log_info "Waiting for MQTT broker at ${BROKER_HOST}:${BROKER_PORT}..."
-    
-    local elapsed=0
-    while [ $elapsed -lt $TIMEOUT_SECONDS ]; do
-        if nc -z "$BROKER_HOST" "$BROKER_PORT" 2>/dev/null; then
-            log_success "MQTT broker port ${BROKER_PORT} is open"
-            return 0
-        fi
-        
-        log_info "Port not available yet, waiting... (${elapsed}/${TIMEOUT_SECONDS}s)"
-        sleep $RETRY_INTERVAL
-        elapsed=$((elapsed + RETRY_INTERVAL))
-    done
-    
-    log_error "MQTT broker port ${BROKER_PORT} failed to open after ${TIMEOUT_SECONDS} seconds"
-    
-    # Additional debugging for CI
-    log_info "Debugging information:"
-    netstat -ln | grep ":${BROKER_PORT}" || log_info "No process listening on port ${BROKER_PORT}"
-    docker ps | grep mosquitto || log_info "No mosquitto containers running"
-    
+  log_info "Checking prerequisites..."
+  if ! command -v mosquitto_pub >/dev/null 2>&1 || ! command -v mosquitto_sub >/dev/null 2>&1; then
+    log_err "mosquitto-clients are required (mosquitto_pub/mosquitto_sub not found)."
+    log_info "Install on Debian/Ubuntu: sudo apt-get install -y mosquitto-clients"
+    log_info "Install on RHEL/CentOS:   sudo yum install -y mosquitto"
+    log_info "Install on macOS (brew):  brew install mosquitto"
     return 1
+  fi
+
+  if ! command -v timeout >/dev/null 2>&1; then
+    log_err "'timeout' command is required (from coreutils)."
+    return 1
+  fi
+
+  # nc is optional; we'll fall back to /dev/tcp if missing
+  if ! command -v nc >/dev/null 2>&1; then
+    log_warn "netcat (nc) not found; will use /dev/tcp fallback for port checks."
+  fi
+
+  log_ok "Prerequisites check passed."
 }
 
-# Test basic MQTT connectivity with extended timeout
-test_mqtt_connection() {
-    log_info "Testing MQTT publish/subscribe functionality..."
-    
-    local test_topic="health_check/test_$$"
-    local test_message="health_check_$(date +%s)"
-    local temp_file="/tmp/mqtt_test_$$"
-    
-    # Clear temp file
-    > "$temp_file"
-    
-    # Start subscriber in background with extended timeout
-    log_info "Starting MQTT subscriber..."
-    timeout ${MQTT_TIMEOUT}s mosquitto_sub -h "$BROKER_HOST" -p "$BROKER_PORT" -t "$test_topic" -q 1 -C 1 > "$temp_file" &
-    local sub_pid=$!
-    
-    # Wait a moment for subscriber to connect
-    sleep 2
-    
-    # Check if subscriber is still running
-    if ! kill -0 $sub_pid 2>/dev/null; then
-        log_error "MQTT subscriber failed to start or connect"
-        rm -f "$temp_file"
-        return 1
-    fi
-    
-    # Publish test message
-    log_info "Publishing test message..."
-    if ! timeout ${MQTT_TIMEOUT}s mosquitto_pub -h "$BROKER_HOST" -p "$BROKER_PORT" -t "$test_topic" -m "$test_message" -q 1; then
-        log_error "Failed to publish MQTT message"
-        kill $sub_pid 2>/dev/null || true
-        rm -f "$temp_file"
-        return 1
-    fi
-    
-    # Wait for subscriber to receive message
-    local wait_count=0
-    while [ $wait_count -lt 10 ] && kill -0 $sub_pid 2>/dev/null; do
-        if [ -s "$temp_file" ]; then
-            break
-        fi
-        sleep 0.5
-        wait_count=$((wait_count + 1))
-    done
-    
-    # Stop subscriber
-    kill $sub_pid 2>/dev/null || true
-    wait $sub_pid 2>/dev/null || true
-    
-    # Check if message was received
-    if [ -s "$temp_file" ]; then
-        local received_message=$(cat "$temp_file" | tr -d '\n')
-        if [ "$received_message" = "$test_message" ]; then
-            log_success "MQTT publish/subscribe test successful"
-            rm -f "$temp_file"
-            return 0
-        else
-            log_error "MQTT message mismatch. Expected: '$test_message', Got: '$received_message'"
-            rm -f "$temp_file"
-            return 1
-        fi
-    else
-        log_error "MQTT subscriber did not receive message within timeout"
-        log_info "Debugging: temp_file content:"
-        cat "$temp_file" || log_info "temp_file is empty or missing"
-        rm -f "$temp_file"
-        return 1
-    fi
-}
-
-# Test QoS 1 functionality
-test_qos1_functionality() {
-    log_info "Testing QoS 1 functionality..."
-    
-    local test_topic="test/qos1_health/$(date +%s)"
-    local test_message="qos1_test_$(date +%s)"
-    local received_file="/tmp/mqtt_qos1_received_$$"
-    
-    # Clean up any existing temp files
-    rm -f "$received_file"
-    
-    # Start subscriber with QoS 1
-    timeout 10s mosquitto_sub \
-        -h "$BROKER_HOST" \
-        -p "$BROKER_PORT" \
-        -t "$test_topic" \
-        -q 1 \
-        -C 1 \
-        > "$received_file" 2>/dev/null &
-    
-    local sub_pid=$!
-    
-    # Give subscriber time to connect
-    sleep 2
-    
-    # Publish with QoS 1
-    if mosquitto_pub \
-        -h "$BROKER_HOST" \
-        -p "$BROKER_PORT" \
-        -t "$test_topic" \
-        -m "$test_message" \
-        --qos 1 2>/dev/null; then
-        log_success "QoS 1 message published successfully"
-    else
-        log_error "Failed to publish QoS 1 message"
-        kill $sub_pid 2>/dev/null || true
-        rm -f "$received_file"
-        return 1
-    fi
-    
-    # Wait for message reception
-    local wait_count=0
-    while [ $wait_count -lt 10 ] && kill -0 $sub_pid 2>/dev/null; do
-        if [ -f "$received_file" ] && [ -s "$received_file" ]; then
-            break
-        fi
-        sleep 0.5
-        wait_count=$((wait_count + 1))
-    done
-    
-    # Verify QoS 1 delivery
-    if [ -f "$received_file" ] && [ -s "$received_file" ]; then
-        log_success "QoS 1 delivery test passed"
-        rm -f "$received_file"
+# ----------------------------
+# Wait for TCP port
+# ----------------------------
+wait_for_port() {
+  log_info "Waiting for ${BROKER_HOST}:${BROKER_PORT} to accept TCP connections (up to ${TIMEOUT_SECONDS}s)..."
+  local elapsed=0
+  while [ "$elapsed" -lt "$TIMEOUT_SECONDS" ]; do
+    if command -v nc >/dev/null 2>&1; then
+      if nc -z "$BROKER_HOST" "$BROKER_PORT" 2>/dev/null; then
+        log_ok "Port ${BROKER_PORT} is open."
         return 0
+      fi
     else
-        log_error "QoS 1 message delivery failed"
-        kill $sub_pid 2>/dev/null || true
-        rm -f "$received_file"
-        return 1
+      # /dev/tcp fallback
+      if timeout 3 bash -c ">/dev/tcp/${BROKER_HOST}/${BROKER_PORT}" 2>/dev/null; then
+        log_ok "Port ${BROKER_PORT} is open."
+        return 0
+      fi
     fi
+
+    log_info "Port not open yet... (${elapsed}/${TIMEOUT_SECONDS}s)"
+    sleep "$RETRY_INTERVAL"
+    elapsed=$((elapsed + RETRY_INTERVAL))
+  done
+
+  log_err "Port ${BROKER_PORT} did not open within ${TIMEOUT_SECONDS}s."
+  # Best-effort debug hints (ignore errors if tools absent)
+  command -v netstat >/dev/null 2>&1 && netstat -ln 2>/dev/null | grep -E ":${BROKER_PORT}\b" || true
+  command -v ss >/dev/null 2>&1 && ss -lnt 2>/dev/null | grep -E ":${BROKER_PORT}\b" || true
+  return 1
 }
 
-# Main health check execution
-main() {
-    log_info "Starting MQTT broker health check..."
-    log_info "Target: ${BROKER_HOST}:${BROKER_PORT}"
-    log_info "Timeout: ${TIMEOUT_SECONDS}s"
-    
-    # Run checks in sequence
-    if ! check_prerequisites; then
-        log_error "Prerequisites check failed"
-        exit 1
+# ----------------------------
+# Basic MQTT pub/sub test (QoS 1)
+# ----------------------------
+test_mqtt_connection() {
+  log_info "Testing MQTT publish/subscribe (QoS 1)..."
+  local test_topic="health/check/$$/$(date +%s)"
+  local test_message="health_check_$(date +%s)"
+  local tmp_file="/tmp/mqtt_health_${$}.out"
+
+  : > "$tmp_file"
+
+  # Start subscriber with a timeout; capture exactly 1 message
+  log_info "Starting subscriber on topic: ${test_topic}"
+  timeout "${MQTT_TIMEOUT}s" mosquitto_sub \
+    -h "$BROKER_HOST" -p "$BROKER_PORT" \
+    -t "$test_topic" -q 1 -C 1 >"$tmp_file" 2>&1 &
+  local sub_pid=$!
+
+  # Give subscriber a moment to connect
+  sleep 2
+
+  if ! kill -0 "$sub_pid" 2>/dev/null; then
+    log_err "Subscriber failed to start or connect."
+    [ -f "$tmp_file" ] && { log_info "Subscriber output:"; sed -e 's/^/  /' "$tmp_file" || true; }
+    rm -f "$tmp_file"
+    return 1
+  fi
+
+  # Publish the test message
+  log_info "Publishing test message..."
+  if ! timeout "${MQTT_TIMEOUT}s" mosquitto_pub \
+      -h "$BROKER_HOST" -p "$BROKER_PORT" \
+      -t "$test_topic" -m "$test_message" -q 1; then
+    log_err "Failed to publish MQTT message."
+    kill "$sub_pid" 2>/dev/null || true
+    rm -f "$tmp_file"
+    return 1
+  fi
+
+  # Wait briefly for delivery (subscriber has its own timeout too)
+  local waited=0
+  while kill -0 "$sub_pid" 2>/dev/null && [ "$waited" -lt "$MQTT_TIMEOUT" ]; do
+    if [ -s "$tmp_file" ]; then
+      break
     fi
-    
-    if ! wait_for_port; then
-        log_error "Port availability check failed"
-        exit 1
+    sleep 1
+    waited=$((waited + 1))
+  done
+
+  # Ensure subscriber is done and collect output
+  kill "$sub_pid" 2>/dev/null || true
+  wait "$sub_pid" 2>/dev/null || true
+
+  if [ -s "$tmp_file" ]; then
+    # mosquitto_sub writes only the payload by default
+    local received
+    # shellcheck disable=SC2002
+    received="$(cat "$tmp_file" | tr -d '\r\n')"
+    rm -f "$tmp_file"
+    if [ "$received" = "$test_message" ]; then
+      log_ok "Publish/Subscribe test passed (message matched)."
+      return 0
+    else
+      log_err "Message mismatch. Expected: '$test_message' Got: '$received'"
+      return 1
     fi
-    
-    if ! test_mqtt_connection; then
-        log_error "Basic MQTT connectivity test failed"
-        exit 1
-    fi
-    
-    if ! test_qos1_functionality; then
-        log_warning "QoS 1 test failed, but continuing (may not be critical)"
-    fi
-    
-    log_success "All MQTT broker health checks passed! ✅"
-    log_info "Broker is ready for test execution"
-    
+  else
+    log_err "Subscriber did not receive a message within timeout."
+    [ -f "$tmp_file" ] && { log_info "Subscriber output:"; sed -e 's/^/  /' "$tmp_file" || true; rm -f "$tmp_file"; }
+    return 1
+  fi
+}
+
+# ----------------------------
+# Optional: additional QoS1 delivery check (topic-only)
+# ----------------------------
+test_qos1_topic_delivery() {
+  log_info "Testing QoS 1 delivery on a fresh topic..."
+  local test_topic="health/qos1/$(date +%s)/$$"
+  local received_file="/tmp/mqtt_qos1_${$}.out"
+  rm -f "$received_file"
+
+  timeout 10s mosquitto_sub -h "$BROKER_HOST" -p "$BROKER_PORT" \
+    -t "$test_topic" -q 1 -C 1 >"$received_file" 2>/dev/null &
+  local sub_pid=$!
+
+  sleep 2
+
+  if ! mosquitto_pub -h "$BROKER_HOST" -p "$BROKER_PORT" \
+      -t "$test_topic" -m "qos1_probe_$(date +%s)" -q 1 2>/dev/null; then
+    log_warn "QoS1 probe publish failed."
+    kill "$sub_pid" 2>/dev/null || true
+    rm -f "$received_file"
+    return 1
+  fi
+
+  local tries=0
+  while [ $tries -lt 10 ] && kill -0 "$sub_pid" 2>/dev/null; do
+    [ -s "$received_file" ] && break
+    sleep 0.5
+    tries=$((tries + 1))
+  done
+
+  kill "$sub_pid" 2>/dev/null || true
+  wait "$sub_pid" 2>/dev/null || true
+
+  if [ -s "$received_file" ]; then
+    log_ok "QoS1 topic delivery appears OK."
+    rm -f "$received_file"
     return 0
+  else
+    log_warn "QoS1 topic delivery not confirmed."
+    rm -f "$received_file"
+    return 1
+  fi
 }
 
-# Execute main function
+# ----------------------------
+# Main
+# ----------------------------
+main() {
+  log_info "Starting MQTT broker health check..."
+  log_info "Target: ${BROKER_HOST}:${BROKER_PORT}"
+  log_info "Timeout: ${TIMEOUT_SECONDS}s"
+
+  check_prerequisites
+  wait_for_port
+  test_mqtt_connection
+
+  # Optional: do not fail CI if this extra probe fails
+  if ! test_qos1_topic_delivery; then
+    log_warn "QoS1 topic probe failed (non-fatal)."
+  fi
+
+  log_ok "All required MQTT health checks passed. ✅"
+}
+
 main "$@"
