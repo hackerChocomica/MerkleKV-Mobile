@@ -67,12 +67,12 @@ jobs:
           
       - name: Start test brokers
         run: |
-          docker-compose -f docker-compose.test.yml up -d
+          docker compose -f docker-compose.test.yml up -d
           
       - name: Wait for brokers to be ready
         run: |
           echo "Waiting for Mosquitto..."
-          timeout 60 sh -c 'until docker-compose -f docker-compose.test.yml exec -T mosquitto-test mosquitto_sub -h localhost -t "\$SYS/broker/uptime" -C 1; do sleep 2; done'
+          timeout 60 sh -c 'until docker compose -f docker-compose.test.yml exec -T mosquitto-test mosquitto_sub -h localhost -t "\$SYS/broker/uptime" -C 1; do sleep 2; done'
           
           echo "Waiting for HiveMQ..."
           timeout 60 sh -c 'until curl -f http://localhost:8080/api/v1/mqtt/clients; do sleep 2; done'
@@ -94,7 +94,7 @@ jobs:
       - name: Verify broker connectivity
         run: |
           # Test Mosquitto
-          docker-compose -f docker-compose.test.yml exec -T mosquitto-test \
+          docker compose -f docker-compose.test.yml exec -T mosquitto-test \
             mosquitto_pub -h localhost -t "test/connectivity" -m "mosquitto_ok"
             
           # Test HiveMQ (if accessible)
@@ -123,9 +123,9 @@ jobs:
         if: failure()
         run: |
           mkdir -p logs
-          docker-compose -f docker-compose.test.yml logs mosquitto-test > logs/mosquitto.log 2>&1 || true
-          docker-compose -f docker-compose.test.yml logs hivemq-test > logs/hivemq.log 2>&1 || true
-          docker-compose -f docker-compose.test.yml logs toxiproxy > logs/toxiproxy.log 2>&1 || true
+          docker compose -f docker-compose.test.yml logs mosquitto-test > logs/mosquitto.log 2>&1 || true
+          docker compose -f docker-compose.test.yml logs hivemq-test > logs/hivemq.log 2>&1 || true
+          docker compose -f docker-compose.test.yml logs toxiproxy > logs/toxiproxy.log 2>&1 || true
           
       - name: Upload broker logs
         if: failure()
@@ -138,7 +138,7 @@ jobs:
       - name: Stop test brokers
         if: always()
         run: |
-          docker-compose -f docker-compose.test.yml down -v
+          docker compose -f docker-compose.test.yml down -v
           
   security-compliance:
     name: Security Compliance Tests
@@ -167,11 +167,11 @@ jobs:
           
       - name: Start secure brokers
         run: |
-          docker-compose -f docker-compose.test.yml up -d mosquitto-test
+          docker compose -f docker-compose.test.yml up -d mosquitto-test
           
       - name: Wait for secure broker
         run: |
-          timeout 60 sh -c 'until docker-compose -f docker-compose.test.yml exec -T mosquitto-test mosquitto_sub -h localhost -t "\$SYS/broker/uptime" -C 1; do sleep 2; done'
+          timeout 60 sh -c 'until docker compose -f docker-compose.test.yml exec -T mosquitto-test mosquitto_sub -h localhost -t "\$SYS/broker/uptime" -C 1; do sleep 2; done'
           
       - name: Run security compliance tests
         working-directory: packages/merkle_kv_core
@@ -190,7 +190,7 @@ jobs:
       - name: Stop secure brokers
         if: always()
         run: |
-          docker-compose -f docker-compose.test.yml down -v
+          docker compose -f docker-compose.test.yml down -v
           
   performance-baseline:
     name: Performance Baseline
@@ -218,11 +218,11 @@ jobs:
           
       - name: Start performance test brokers
         run: |
-          docker-compose -f docker-compose.test.yml up -d mosquitto-test
+          docker compose -f docker-compose.test.yml up -d mosquitto-test
           
       - name: Wait for broker
         run: |
-          timeout 60 sh -c 'until docker-compose -f docker-compose.test.yml exec -T mosquitto-test mosquitto_sub -h localhost -t "\$SYS/broker/uptime" -C 1; do sleep 2; done'
+          timeout 60 sh -c 'until docker compose -f docker-compose.test.yml exec -T mosquitto-test mosquitto_sub -h localhost -t "\$SYS/broker/uptime" -C 1; do sleep 2; done'
           
       - name: Run performance baseline tests
         working-directory: packages/merkle_kv_core
@@ -237,7 +237,7 @@ jobs:
       - name: Stop brokers
         if: always()
         run: |
-          docker-compose -f docker-compose.test.yml down -v
+          docker compose -f docker-compose.test.yml down -v
           
   summary:
     name: Integration Test Summary

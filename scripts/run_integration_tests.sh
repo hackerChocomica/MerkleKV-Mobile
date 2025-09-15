@@ -12,6 +12,16 @@ COMPOSE_FILE="$PROJECT_ROOT/docker-compose.test.yml"
 CERT_DIR="$PROJECT_ROOT/test/integration/certs"
 TEST_DIR="$PROJECT_ROOT/packages/merkle_kv_core/test/integration"
 
+# Detect Docker Compose command (v1 vs v2)
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+elif docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+else
+    echo "Error: Neither 'docker-compose' nor 'docker compose' is available"
+    exit 1
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -39,7 +49,7 @@ log_error() {
 # Cleanup function
 cleanup() {
     log_info "Cleaning up test environment..."
-    docker-compose -f "$COMPOSE_FILE" down -v 2>/dev/null || true
+    $DOCKER_COMPOSE -f "$COMPOSE_FILE" down -v 2>/dev/null || true
     log_success "Cleanup completed"
 }
 
@@ -56,9 +66,9 @@ check_prerequisites() {
         exit 1
     fi
     
-    # Check Docker Compose
-    if ! command -v docker-compose &> /dev/null; then
-        log_error "Docker Compose is not installed or not in PATH"
+    # Check Docker Compose (v1 or v2)
+    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null 2>&1; then
+        log_error "Docker Compose is not installed or not available (tried both v1 and v2)"
         exit 1
     fi
     
@@ -115,13 +125,13 @@ start_infrastructure() {
     log_info "Starting test infrastructure..."
     
     # Start brokers
-    docker-compose -f "$COMPOSE_FILE" up -d
+    $DOCKER_COMPOSE -f "$COMPOSE_FILE" up -d
     
     # Wait for Mosquitto
     log_info "Waiting for Mosquitto to be ready..."
-    timeout 60 sh -c 'until docker-compose -f "'"$COMPOSE_FILE"'" exec -T mosquitto-test mosquitto_sub -h localhost -t "\$SYS/broker/uptime" -C 1 >/dev/null 2>&1; do sleep 2; done' || {
+    timeout 60 sh -c 'until '$DOCKER_COMPOSE' -f "'"$COMPOSE_FILE"'" exec -T mosquitto-test mosquitto_sub -h localhost -t "\$SYS/broker/uptime" -C 1 >/dev/null 2>&1; do sleep 2; done' || {
         log_error "Mosquitto failed to start within timeout"
-        docker-compose -f "$COMPOSE_FILE" logs mosquitto-test
+        $DOCKER_COMPOSE -f "$COMPOSE_FILE" logs mosquitto-test
         exit 1
     }
     log_success "Mosquitto is ready"
@@ -216,7 +226,7 @@ show_broker_status() {
     log_info "Broker status:"
     
     # Mosquitto status
-    if docker-compose -f "$COMPOSE_FILE" exec -T mosquitto-test mosquitto_pub -h localhost -t "test/status" -m "check" >/dev/null 2>&1; then
+    if $DOCKER_COMPOSE -f "$COMPOSE_FILE" exec -T mosquitto-test mosquitto_pub -h localhost -t "test/status" -m "check" >/dev/null 2>&1; then
         log_success "Mosquitto: Running"
     else
         log_error "Mosquitto: Not responding"
