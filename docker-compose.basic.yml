@@ -1,0 +1,46 @@
+services:
+  # Mosquitto MQTT Broker for Basic Integration Testing
+  mosquitto-test:
+    image: eclipse-mosquitto:2.0
+    container_name: merkle_kv_mosquitto_test
+    ports:
+      - "1883:1883"    # MQTT
+    volumes:
+      - ./test/integration/config/mosquitto/mosquitto-basic.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_test_data:/mosquitto/data
+      - mosquitto_test_log:/mosquitto/log
+    environment:
+      - TZ=UTC
+    networks:
+      - integration_test_network
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -h localhost -t '$$SYS/broker/uptime' -C 1 | grep -q '[0-9]'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # Network proxy for simulating network partitions
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.5.0
+    container_name: merkle_kv_toxiproxy
+    ports:
+      - "8474:8474"    # Toxiproxy API
+      - "1885:1885"    # Proxied Mosquitto MQTT
+    networks:
+      - integration_test_network
+    depends_on:
+      - mosquitto-test
+
+networks:
+  integration_test_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  mosquitto_test_data:
+    driver: local
+  mosquitto_test_log:
+    driver: local
