@@ -325,13 +325,14 @@ void main() {
         expect(response2.status, equals(ResponseStatus.ok));
         expect(response2.id, equals(requestId));
         
-        // TODO: Debug idempotency cache - currently not working as expected
-        // Expected: Storage should only contain first value due to cache hit
-        // Actual: Second operation executes and overwrites first value
-        // For now, verify that both operations completed successfully
+        // Verify idempotency: storage should only contain first value due to cache hit
         final stored = storage.getEntry('test-key');
-        expect(stored?.value, isNotNull); // Just verify storage has a value
-      }, skip: 'Idempotency cache needs debugging - cache not preventing second operation');
+        expect(stored?.value, equals('first-value')); // Should be first value, not second
+        
+        // Verify responses are identical (from cache)
+        expect(response1.status, equals(response2.status));
+        expect(response1.id, equals(response2.id));
+      });
 
       test('different request IDs are processed separately', () async {
         await processor.set('test-key', 'first-value', 'request-1');
@@ -401,15 +402,16 @@ void main() {
         
         expect(response1.id, equals(response2.id));
         
-        // TODO: Debug idempotency cache for bulk operations
-        // Expected: Original values should be preserved due to cache hit
-        // Actual: Second operation executes and overwrites values
-        // For now, verify that both operations completed successfully
+        // Verify idempotency: original values should be preserved due to cache hit
         final stored1 = storage.getEntry('bulk1');
         final stored2 = storage.getEntry('bulk2');
-        expect(stored1?.value, isNotNull);
-        expect(stored2?.value, isNotNull);
-      }, skip: 'Bulk idempotency cache needs debugging - cache not preventing second operation');
+        expect(stored1?.value, equals('value1')); // Should be first value, not 'different1'
+        expect(stored2?.value, equals('value2')); // Should be first value, not 'different2'
+        
+        // Verify responses are identical (from cache)
+        expect(response1.status, equals(response2.status));
+        expect(response1.results?.length, equals(response2.results?.length));
+      });
     });
 
     group('Sequence Number Management', () {
