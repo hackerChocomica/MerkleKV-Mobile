@@ -1,22 +1,7 @@
 #!/bin/bash
 set -e
 
-# Certificate gen# Create server certificate extension file with configurable IPs
-cat > server.ext << EOF
-authorityKeyIdentifier=keyid,issuer
-basicConstraints=CA:FALSE
-keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
-subjectAltName = @alt_names
-
-[alt_names]
-DNS.1 = localhost
-DNS.2 = mosquitto-test
-DNS.3 = hivemq-test
-DNS.4 = 127.0.0.1
-IP.1 = 127.0.0.1
-IP.2 = $MOSQUITTO_IP
-IP.3 = $HIVEMQ_IP
-EOFor integration testing
+# Certificate generation for integration testing
 # Creates CA, server, and client certificates for TLS testing
 
 # Get the directory where this script is located
@@ -50,7 +35,7 @@ openssl genrsa -out server.key 4096
 # Create server certificate signing request
 openssl req -new -key server.key -out server.csr -subj "/C=US/ST=Test/L=Test/O=MerkleKV/OU=Testing/CN=localhost"
 
-# Create server certificate extensions file
+# Create server certificate extensions file with configurable IPs
 cat > server.ext << EOF
 authorityKeyIdentifier=keyid,issuer
 basicConstraints=CA:FALSE
@@ -63,8 +48,8 @@ DNS.2 = mosquitto-test
 DNS.3 = hivemq-test
 DNS.4 = 127.0.0.1
 IP.1 = 127.0.0.1
-IP.2 = 172.21.0.2
-IP.3 = 172.21.0.3
+IP.2 = $MOSQUITTO_IP
+IP.3 = $HIVEMQ_IP
 EOF
 
 # Generate server certificate
