@@ -46,15 +46,16 @@ Future<void> _testTcpConnection(String host, int port) async {
   }
 }
 
-/// Test basic MQTT protocol handshake
+/// Test basic MQTT protocol handshake using simplified approach
 Future<void> _testMqttHandshake(String host, int port) async {
   print('  • Testing MQTT protocol handshake...');
   
   try {
     final socket = await Socket.connect(host, port, timeout: Duration(seconds: 5));
     
-    // Send MQTT CONNECT packet
-    final connectPacket = _buildMqttConnectPacket('integration-test-client');
+    // Send a simple MQTT CONNECT packet (minimal valid packet)
+    // This is a simplified test that just verifies the broker responds
+    final connectPacket = _buildMinimalMqttConnect();
     socket.add(connectPacket);
     
     print('    ✅ MQTT CONNECT packet sent');
@@ -84,45 +85,22 @@ Future<void> _testMqttHandshake(String host, int port) async {
     throw Exception('MQTT handshake failed: $e');
   }
 }
+}
 
-/// Build a minimal MQTT CONNECT packet
-List<int> _buildMqttConnectPacket(String clientId) {
-  final List<int> packet = [];
-  
-  // Fixed header
-  packet.add(0x10); // CONNECT packet type
-  
-  // Variable header and payload
-  final variableHeader = <int>[
-    // Protocol name "MQTT"
-    0x00, 0x04, // length
+/// Build a minimal MQTT CONNECT packet for basic connectivity testing
+/// Note: This is a simplified implementation for test purposes only.
+/// In production code, use a proper MQTT client library instead.
+List<int> _buildMinimalMqttConnect() {
+  // Pre-built minimal MQTT CONNECT packet for client ID "test"
+  // This avoids manual protocol construction while maintaining test functionality
+  return [
+    0x10, 0x16,           // Fixed header: CONNECT packet, length 22
+    0x00, 0x04,           // Protocol name length
     0x4D, 0x51, 0x54, 0x54, // "MQTT"
-    
-    // Protocol level (4 for MQTT 3.1.1)
-    0x04,
-    
-    // Connect flags (clean session = 1)
-    0x02,
-    
-    // Keep alive (60 seconds)
-    0x00, 0x3C,
+    0x04,                 // Protocol level (MQTT 3.1.1)
+    0x02,                 // Connect flags (clean session)
+    0x00, 0x3C,           // Keep alive (60 seconds)
+    0x00, 0x04,           // Client ID length
+    0x74, 0x65, 0x73, 0x74 // Client ID "test"
   ];
-  
-  // Payload (client ID)
-  final clientIdBytes = clientId.codeUnits;
-  final payload = <int>[
-    (clientIdBytes.length >> 8) & 0xFF, // length high byte
-    clientIdBytes.length & 0xFF,        // length low byte
-    ...clientIdBytes,                   // client ID
-  ];
-  
-  // Calculate remaining length
-  final remainingLength = variableHeader.length + payload.length;
-  packet.add(remainingLength);
-  
-  // Add variable header and payload
-  packet.addAll(variableHeader);
-  packet.addAll(payload);
-  
-  return packet;
 }

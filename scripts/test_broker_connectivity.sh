@@ -1,11 +1,15 @@
 #!/bin/bash
 set -e
 
+# Allow override of compose file via environment variable or first argument
+COMPOSE_FILE_PATH="${COMPOSE_FILE:-${1:-docker-compose.test.yml}}"
+
 echo "Testing MQTT broker connectivity..."
+echo "Using compose file: $COMPOSE_FILE_PATH"
 
 # Test Mosquitto basic connectivity
 echo "Testing Mosquitto..."
-if docker compose -f docker-compose.test.yml exec -T mosquitto-test mosquitto_pub -h localhost -t "test/simple" -m "hello" 2>/dev/null; then
+if docker compose -f "$COMPOSE_FILE_PATH" exec -T mosquitto-test mosquitto_pub -h localhost -t "test/simple" -m "hello" 2>/dev/null; then
     echo "✅ Mosquitto publish test passed"
 else
     echo "❌ Mosquitto publish failed"

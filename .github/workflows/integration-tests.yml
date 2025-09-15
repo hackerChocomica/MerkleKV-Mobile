@@ -73,19 +73,22 @@ jobs:
           echo "Certificate files:"
           find test/integration/certs/ -name "*.crt" -o -name "*.key" -o -name "*.p12" | sort
           
-          # Ensure minimum required certificates exist for Docker mounts
-          if [ ! -f "test/integration/certs/ca.crt" ]; then
-            echo "WARNING: ca.crt missing, creating placeholder"
-            touch test/integration/certs/ca.crt
+          # Validate that required certificates were generated successfully
+          missing=0
+          for cert in ca.crt server.crt server.key; do
+            if [ ! -f "test/integration/certs/$cert" ]; then
+              echo "ERROR: Required certificate test/integration/certs/$cert is missing!"
+              echo "Certificate generation failed. Cannot proceed with integration tests."
+              missing=1
+            else
+              echo "✓ Found required certificate: $cert"
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "❌ One or more required certificates are missing. Failing the workflow."
+            exit 1
           fi
-          if [ ! -f "test/integration/certs/server.crt" ]; then
-            echo "WARNING: server.crt missing, creating placeholder" 
-            touch test/integration/certs/server.crt
-          fi
-          if [ ! -f "test/integration/certs/server.key" ]; then
-            echo "WARNING: server.key missing, creating placeholder"
-            touch test/integration/certs/server.key
-          fi
+          echo "✅ All required certificates are present"
           
       - name: Start test brokers
         run: |

@@ -1,7 +1,22 @@
 #!/bin/bash
 set -e
 
-# Certificate generation script for integration testing
+# Certificate gen# Create server certificate extension file with configurable IPs
+cat > server.ext << EOF
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+DNS.2 = mosquitto-test
+DNS.3 = hivemq-test
+DNS.4 = 127.0.0.1
+IP.1 = 127.0.0.1
+IP.2 = $MOSQUITTO_IP
+IP.3 = $HIVEMQ_IP
+EOFor integration testing
 # Creates CA, server, and client certificates for TLS testing
 
 # Get the directory where this script is located
@@ -9,7 +24,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CERT_DIR="$SCRIPT_DIR/certs"
 VALIDITY_DAYS=365
 
+# Configurable network settings via environment variables
+MOSQUITTO_IP="${MOSQUITTO_IP:-172.21.0.2}"
+HIVEMQ_IP="${HIVEMQ_IP:-172.21.0.3}"
+DOCKER_SUBNET="${DOCKER_SUBNET:-172.21.0.0/16}"
+
 echo "Generating TLS certificates for integration testing..."
+echo "Using Mosquitto IP: $MOSQUITTO_IP"
+echo "Using HiveMQ IP: $HIVEMQ_IP"
+echo "Docker subnet: $DOCKER_SUBNET"
 
 # Create certificate directory if it doesn't exist
 mkdir -p "$CERT_DIR"

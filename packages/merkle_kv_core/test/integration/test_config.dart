@@ -159,9 +159,20 @@ class TestConfigurations {
 /// Utility class for generating test data
 class TestDataGenerator {
   /// Generate a string of specified size for payload testing
+  /// Optimized for large payloads to avoid memory issues
   static String generatePayload(int sizeInBytes) {
-    const char = 'A';
-    return char * sizeInBytes;
+    if (sizeInBytes <= 0) return '';
+    
+    // For small payloads, use simple string multiplication
+    if (sizeInBytes <= 1024) {
+      const char = 'A';
+      return char * sizeInBytes;
+    }
+    
+    // For large payloads, use List.filled for better memory efficiency
+    // This avoids creating intermediate strings during multiplication
+    final codeUnits = List.filled(sizeInBytes, 65); // 'A' = 65
+    return String.fromCharCodes(codeUnits);
   }
   
   /// Generate 256KiB payload for Locked Spec compliance testing
