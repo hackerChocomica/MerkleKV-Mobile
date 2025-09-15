@@ -201,15 +201,16 @@ void main() {
         // Set up test data in specific order
         final keys = ['key-3', 'key-1', 'key-2']; // Intentionally unordered
         
-        await processor.set('key-1', 'value-1', 'setup');
-        await processor.set('key-3', 'value-3', 'setup');
+        await processor.set('key-1', 'value-1', 'setup-1');
+        await processor.set('key-3', 'value-3', 'setup-2');
         // key-2 intentionally missing
         
         final command = Command(id: 'test-1', op: 'MGET', keys: keys);
         final response = await processor.processCommand(command);
         
         expect(response.status, equals(ResponseStatus.ok));
-        expect(response.results?.length, equals(3));
+        expect(response.results, isNotNull, reason: 'Results should not be null');
+        expect(response.results!.length, equals(3));
         
         // Verify order matches submission order
         expect(response.results![0].key, equals('key-3'));
@@ -420,24 +421,31 @@ void main() {
         await processor.set('seq-key-2', 'value2', 'req-2');
         await processor.set('seq-key-3', 'value3', 'req-3');
         
-        final entry1 = storage.getEntry('seq-key-1')!;
-        final entry2 = storage.getEntry('seq-key-2')!;
-        final entry3 = storage.getEntry('seq-key-3')!;
+        final entry1 = storage.getEntry('seq-key-1');
+        final entry2 = storage.getEntry('seq-key-2');
+        final entry3 = storage.getEntry('seq-key-3');
         
-        expect(entry1.seq, equals(1));
-        expect(entry2.seq, equals(2));
-        expect(entry3.seq, equals(3));
+        expect(entry1, isNotNull, reason: 'Entry 1 should exist');
+        expect(entry2, isNotNull, reason: 'Entry 2 should exist');
+        expect(entry3, isNotNull, reason: 'Entry 3 should exist');
+        
+        expect(entry1!.seq, equals(1));
+        expect(entry2!.seq, equals(2));
+        expect(entry3!.seq, equals(3));
       });
 
       test('sequence numbers are unique per node', () async {
         await processor.set('node-key-1', 'value1', 'req-1');
         await processor.set('node-key-2', 'value2', 'req-2');
         
-        final entry1 = storage.getEntry('node-key-1')!;
-        final entry2 = storage.getEntry('node-key-2')!;
+        final entry1 = storage.getEntry('node-key-1');
+        final entry2 = storage.getEntry('node-key-2');
         
-        expect(entry1.nodeId, equals('test-node'));
-        expect(entry2.nodeId, equals('test-node'));
+        expect(entry1, isNotNull, reason: 'Entry 1 should exist');
+        expect(entry2, isNotNull, reason: 'Entry 2 should exist');
+        
+        expect(entry1!.nodeId, equals('test-node'));
+        expect(entry2!.nodeId, equals('test-node'));
         expect(entry1.seq, isNot(equals(entry2.seq)));
       });
 
@@ -461,23 +469,30 @@ void main() {
         await processor.get('read-test', 'req-2'); // Should not increment
         await processor.set('read-test-2', 'value2', 'req-3'); // seq 2
         
-        final entry1 = storage.getEntry('read-test')!;
-        final entry2 = storage.getEntry('read-test-2')!;
+        final entry1 = storage.getEntry('read-test');
+        final entry2 = storage.getEntry('read-test-2');
         
-        expect(entry1.seq, equals(1));
-        expect(entry2.seq, equals(2)); // Should be 2, not 3
+        expect(entry1, isNotNull, reason: 'Read test entry should exist');
+        expect(entry2, isNotNull, reason: 'Read test entry 2 should exist');
+        
+        expect(entry1!.seq, equals(1));
+        expect(entry2!.seq, equals(2)); // Should be 2, not 3
       });
 
       test('bulk operations increment sequence for each item', () async {
         final keyValues = {'bulk-1': 'value1', 'bulk-2': 'value2', 'bulk-3': 'value3'};
         await processor.mset(keyValues, 'bulk-req');
         
-        final entry1 = storage.getEntry('bulk-1')!;
-        final entry2 = storage.getEntry('bulk-2')!;
-        final entry3 = storage.getEntry('bulk-3')!;
+        final entry1 = storage.getEntry('bulk-1');
+        final entry2 = storage.getEntry('bulk-2');
+        final entry3 = storage.getEntry('bulk-3');
+        
+        expect(entry1, isNotNull, reason: 'Bulk entry 1 should exist');
+        expect(entry2, isNotNull, reason: 'Bulk entry 2 should exist');
+        expect(entry3, isNotNull, reason: 'Bulk entry 3 should exist');
         
         // Each item should have different sequence number
-        final sequences = [entry1.seq, entry2.seq, entry3.seq];
+        final sequences = [entry1!.seq, entry2!.seq, entry3!.seq];
         expect(sequences.toSet().length, equals(3)); // All unique
       });
     });
@@ -505,8 +520,9 @@ void main() {
           await processor.set('chain-key', 'value-$i', 'req-$i');
         }
         
-        final finalEntry = storage.getEntry('chain-key')!;
-        expect(finalEntry.value, equals('value-${operationCount - 1}'));
+        final finalEntry = storage.getEntry('chain-key');
+        expect(finalEntry, isNotNull, reason: 'Final chain entry should exist');
+        expect(finalEntry!.value, equals('value-${operationCount - 1}'));
         expect(finalEntry.seq, equals(operationCount));
       });
 

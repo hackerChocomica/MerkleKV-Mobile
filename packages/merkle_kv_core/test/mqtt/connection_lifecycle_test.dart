@@ -285,7 +285,8 @@ void main() {
       });
 
       test('connection timeout is handled properly', () async {
-        mockClient.connectDelay = TestTimings.longDelay; // Longer than timeout
+        // Use a shorter delay for faster testing, but still longer than a reasonable timeout
+        mockClient.connectDelay = const Duration(seconds: 5); // Shorter delay for testing
         
         final events = <ConnectionStateEvent>[];
         final subscription = manager.connectionState.listen((event) {
