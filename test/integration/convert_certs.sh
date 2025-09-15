@@ -2,7 +2,9 @@
 set -e
 
 # Convert PEM certificates to PKCS12 format for HiveMQ
-CERT_DIR="/workspaces/MerkleKV-Mobile/test/integration/certs"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CERT_DIR="$SCRIPT_DIR/certs"
 
 echo "Converting certificates to PKCS12 format for HiveMQ..."
 
