@@ -9,6 +9,8 @@ VALIDITY_DAYS=365
 
 echo "Generating TLS certificates for integration testing..."
 
+# Create certificate directory if it doesn't exist
+mkdir -p "$CERT_DIR"
 cd "$CERT_DIR"
 
 # Generate CA private key

@@ -6,6 +6,8 @@ CERT_DIR="/workspaces/MerkleKV-Mobile/test/integration/certs"
 
 echo "Converting certificates to PKCS12 format for HiveMQ..."
 
+# Ensure certificate directory exists
+mkdir -p "$CERT_DIR"
 cd "$CERT_DIR"
 
 # Convert CA certificate to PKCS12
