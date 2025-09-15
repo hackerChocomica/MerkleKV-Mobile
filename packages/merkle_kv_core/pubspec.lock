@@ -154,7 +154,7 @@ packages:
     source: hosted
     version: "3.1.1"
   coverage:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: coverage
       sha256: "3945034e86ea203af7a056d98e98e42a5518fff200d6e8e6647e1886b07e936e"
@@ -337,6 +337,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.4.4"
+  mocktail:
+    dependency: "direct dev"
+    description:
+      name: mocktail
+      sha256: "890df3f9688106f25755f26b1c60589a92b3ab91a22b8b224947ad041bf172d8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.4"
   mqtt_client:
     dependency: "direct main"
     description:
