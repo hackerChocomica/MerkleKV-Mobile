@@ -431,8 +431,8 @@ void main() {
 
       test('APPEND on tombstoned key treats as empty string', () async {
         // Set and delete key
-        await processor.set('key', 'old', 'test-req');
-        await processor.delete('key', 'test-req');
+        await processor.set('key', 'old', 'test-req-set');
+        await processor.delete('key', 'test-req-del');
         
         final command = Command(id: 'req-1', op: 'APPEND', key: 'key', value: 'new');
         final response = await processor.processCommand(command);
@@ -479,8 +479,8 @@ void main() {
     group('MGET/MSET operations', () {
       test('MGET returns results in submission order', () async {
         // Set some test data
-        await processor.set('key1', 'value1', 'test-req');
-        await processor.set('key3', 'value3', 'test-req');
+        await processor.set('key1', 'value1', 'test-req-1');
+        await processor.set('key3', 'value3', 'test-req-3');
         // key2 intentionally missing
 
         final command = Command(
@@ -778,10 +778,10 @@ void main() {
 
     group('Sequence number management', () {
       test('increments sequence for each mutation', () async {
-        await processor.set('key1', 'value1', 'test-req');
-        await processor.set('key2', 'value2', 'test-req');
-        await processor.delete('key1', 'test-req');
-        await processor.set('key3', 'value3', 'test-req');
+        await processor.set('key1', 'value1', 'test-req-1');
+        await processor.set('key2', 'value2', 'test-req-2');
+        await processor.delete('key1', 'test-req-3');
+        await processor.set('key3', 'value3', 'test-req-4');
 
         final entry2 = storage.getEntry('key2')!;
         final tombstone1 = storage.getEntry('key1')!;
@@ -793,10 +793,10 @@ void main() {
       });
 
       test('does not increment sequence for GET operations', () async {
-        await processor.set('key1', 'value1', 'test-req');
-        await processor.get('key1', 'test-req');
-        await processor.get('missing-key', 'test-req');
-        await processor.set('key2', 'value2', 'test-req');
+        await processor.set('key1', 'value1', 'test-req-1');
+        await processor.get('key1', 'test-req-2');
+        await processor.get('missing-key', 'test-req-3');
+        await processor.set('key2', 'value2', 'test-req-4');
 
         final entry1 = storage.getEntry('key1')!;
         final entry2 = storage.getEntry('key2')!;
@@ -812,12 +812,12 @@ void main() {
         // Each emoji is 4 bytes in UTF-8
         final multiByteKey = '🚀' * 64; // 64 * 4 = 256 bytes exactly
 
-        final response = await processor.set(multiByteKey, 'value', 'test-req');
+        final response = await processor.set(multiByteKey, 'value', 'test-req-1');
         expect(response.status, equals(ResponseStatus.ok));
 
         // One more byte should fail
         final oversizedKey = multiByteKey + 'a'; // 257 bytes
-        final errorResponse = await processor.set(oversizedKey, 'value', 'test-req');
+        final errorResponse = await processor.set(oversizedKey, 'value', 'test-req-2');
         expect(errorResponse.errorCode, equals(ErrorCode.payloadTooLarge));
       });
 
@@ -826,12 +826,12 @@ void main() {
         final charCount = (256 * 1024) ~/ 4; // 4 bytes per emoji
         final maxValue = '🚀' * charCount;
 
-        final response = await processor.set('key', maxValue, 'test-req');
+        final response = await processor.set('key', maxValue, 'test-req-1');
         expect(response.status, equals(ResponseStatus.ok));
 
         // One more character should fail
         final oversizedValue = maxValue + '🚀';
-        final errorResponse = await processor.set('key2', oversizedValue, 'test-req');
+        final errorResponse = await processor.set('key2', oversizedValue, 'test-req-2');
         expect(errorResponse.errorCode, equals(ErrorCode.payloadTooLarge));
       });
     });

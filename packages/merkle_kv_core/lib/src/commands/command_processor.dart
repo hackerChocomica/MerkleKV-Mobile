@@ -272,11 +272,7 @@ class CommandProcessorImpl implements CommandProcessor {
       if (entry == null || entry.isTombstone) {
         final response = Response.notFound(id);
         
-        // Cache response
-        if (id.isNotEmpty) {
-          _cacheResponse(id, response);
-        }
-        
+        // Do not cache error responses (including NOT_FOUND)
         return response;
       }
       
