@@ -113,14 +113,14 @@ class MqttClientImpl implements MqttClientInterface {
     try {
       var status;
 
-      // Create a timeout completer for 20-second connection timeout (increased for CI)
+      // Create a timeout completer for configurable connection timeout
       final connectionCompleter = Completer<MqttClientConnectionStatus?>();
       Timer? timeoutTimer;
 
-      // Set up timeout - increased to 20 seconds for slow CI environments
-      timeoutTimer = Timer(const Duration(seconds: 20), () {
+      // Set up timeout from configuration
+      timeoutTimer = Timer(Duration(seconds: _config.connectionTimeoutSeconds), () {
         if (!connectionCompleter.isCompleted) {
-          connectionCompleter.completeError(Exception('Connection timeout after 20 seconds'));
+          connectionCompleter.completeError(Exception('Connection timeout after ${_config.connectionTimeoutSeconds} seconds'));
         }
       });
 

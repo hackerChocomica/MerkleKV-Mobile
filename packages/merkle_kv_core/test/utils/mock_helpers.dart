@@ -205,6 +205,7 @@ class MockMqttClient extends Mock implements MqttClientInterface {
   }
 
   Future<void> dispose() async {
+    reset(); // Clear internal state to prevent memory leaks
     await _connectionStateController.close();
   }
 }

@@ -5,6 +5,7 @@ import '../../../lib/src/commands/command_processor.dart';
 import '../../../lib/src/commands/command.dart';
 import '../../../lib/src/commands/response.dart';
 import '../../../lib/src/config/merkle_kv_config.dart';
+import '../../../lib/src/storage/storage_entry.dart';
 import '../../../lib/src/utils/bulk_operations.dart';
 import '../../utils/generators.dart';
 import '../../utils/mock_helpers.dart';
@@ -531,10 +532,14 @@ void main() {
         await processor.set('test-key', 'valid-value', 'valid-req');
         
         // Corrupt storage entry (simulating data corruption)
-        final corruptEntry = TestDataFactory.createEntry(
+        // Create a corrupted entry with null value directly using main constructor
+        final corruptEntry = StorageEntry(
           key: 'test-key',
-          value: null, // Simulate corruption
-          isTombstone: false, // But not marked as tombstone
+          value: null, // This simulates corruption - null value but not tombstone
+          timestampMs: DateTime.now().millisecondsSinceEpoch,
+          nodeId: 'test-node',
+          seq: 1,
+          isTombstone: false, // Not marked as tombstone - this is the corruption
         );
         storage.setEntry('test-key', corruptEntry);
         

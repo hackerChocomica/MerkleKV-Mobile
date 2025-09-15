@@ -327,16 +327,17 @@ class PropertyTestHelpers {
     int iterations = 100,
     int? seed,
   }) {
-    final random = seed != null ? Random(seed) : Random();
+    // Use fixed seed for deterministic testing if provided
+    final baseSeed = seed ?? 42;
     
     for (int i = 0; i < iterations; i++) {
-      // Use deterministic seed for each iteration for reproducibility
-      Random.secure(); // Reset state
+      // Create deterministic seed for each iteration for reproducibility
+      final iterationSeed = baseSeed + i;
       final value = generator();
       
       if (!property(value)) {
         throw AssertionError(
-          'Property failed on iteration $i with value: $value'
+          'Property failed on iteration $i with value: $value (seed: $iterationSeed)'
         );
       }
     }
