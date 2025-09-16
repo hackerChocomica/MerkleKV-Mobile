@@ -33,6 +33,13 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   mockito: ^5.4.2
+  
+  # Mobile E2E testing dependencies
+  device_info_plus: ^9.1.0
+  network_info_plus: ^4.0.2
+  battery_plus: ^4.0.2
+  permission_handler: ^11.0.1
+  path_provider: ^2.1.1
 
 flutter:
   uses-material-design: true

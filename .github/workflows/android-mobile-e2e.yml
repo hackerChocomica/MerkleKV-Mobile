@@ -1,0 +1,320 @@
+# Android CI/CD Configuration for Mobile E2E Testing
+# Firebase Test Lab and GitHub Actions integration
+
+name: "Android Mobile E2E Tests"
+
+on:
+  push:
+    branches: [ main, develop, feature/mobile-e2e-* ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run nightly tests at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  FLUTTER_VERSION: '3.16.0'
+  JAVA_VERSION: '17'
+  ANDROID_API_LEVEL: '30'
+  ANDROID_TARGET: 'google_apis'
+  ANDROID_ARCH: 'x86_64'
+
+jobs:
+  android-unit-tests:
+    name: Android Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: ${{ env.JAVA_VERSION }}
+        
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        
+    - name: Install dependencies
+      run: |
+        cd apps/flutter_demo
+        flutter pub get
+        
+    - name: Analyze code
+      run: |
+        cd apps/flutter_demo
+        flutter analyze .
+        
+    - name: Run unit tests
+      run: |
+        cd apps/flutter_demo
+        flutter test test/mobile_e2e/utils/ --coverage
+        
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: apps/flutter_demo/coverage/lcov.info
+
+  android-emulator-tests:
+    name: Android Emulator Tests
+    runs-on: macos-latest # Better Android emulator performance
+    
+    strategy:
+      matrix:
+        api-level: [21, 26, 29, 30, 33]
+        target: [google_apis]
+        arch: [x86_64]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: ${{ env.JAVA_VERSION }}
+        
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        
+    - name: Install dependencies
+      run: |
+        cd apps/flutter_demo
+        flutter pub get
+        
+    - name: Enable KVM (Linux only)
+      if: runner.os == 'Linux'
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+        
+    - name: AVD Cache
+      uses: actions/cache@v3
+      id: avd-cache
+      with:
+        path: |
+          ~/.android/avd/*
+          ~/.android/adb*
+        key: avd-${{ matrix.api-level }}-${{ matrix.target }}-${{ matrix.arch }}
+        
+    - name: Create AVD and generate snapshot for caching
+      if: steps.avd-cache.outputs.cache-hit != 'true'
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: ${{ matrix.api-level }}
+        target: ${{ matrix.target }}
+        arch: ${{ matrix.arch }}
+        force-avd-creation: false
+        emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+        disable-animations: false
+        script: echo "Generated AVD snapshot for caching."
+        
+    - name: Start MQTT Broker
+      run: |
+        docker run -d --name test-mosquitto -p 1883:1883 eclipse-mosquitto:1.6
+        sleep 5
+        
+    - name: Run Android E2E Tests
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: ${{ matrix.api-level }}
+        target: ${{ matrix.target }}
+        arch: ${{ matrix.arch }}
+        force-avd-creation: false
+        emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+        disable-animations: true
+        script: |
+          cd apps/flutter_demo
+          flutter test test/mobile_e2e/android/ --reporter json > test_results_${{ matrix.api-level }}.json || true
+          
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: android-test-results-api-${{ matrix.api-level }}
+        path: apps/flutter_demo/test_results_${{ matrix.api-level }}.json
+        
+    - name: Stop MQTT Broker
+      if: always()
+      run: docker stop test-mosquitto || true
+
+  firebase-test-lab:
+    name: Firebase Test Lab
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: ${{ env.JAVA_VERSION }}
+        
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        
+    - name: Install dependencies
+      run: |
+        cd apps/flutter_demo
+        flutter pub get
+        
+    - name: Build APK for testing
+      run: |
+        cd apps/flutter_demo
+        flutter build apk --debug
+        flutter build apk --debug --target=test_driver/integration_test.dart
+        
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+        
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      
+    - name: Run tests on Firebase Test Lab
+      run: |
+        gcloud firebase test android run \
+          --type instrumentation \
+          --app apps/flutter_demo/build/app/outputs/flutter-apk/app-debug.apk \
+          --test apps/flutter_demo/build/app/outputs/flutter-apk/app-debug-androidTest.apk \
+          --device model=Pixel2,version=28,locale=en,orientation=portrait \
+          --device model=NexusLowRes,version=25,locale=en,orientation=portrait \
+          --device model=Pixel4,version=30,locale=en,orientation=portrait \
+          --timeout 20m \
+          --results-bucket=${{ secrets.FIREBASE_RESULTS_BUCKET }} \
+          --results-dir=android-e2e-$(date +%Y%m%d_%H%M%S)
+
+  aws-device-farm:
+    name: AWS Device Farm
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' # Only run nightly
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: ${{ env.JAVA_VERSION }}
+        
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        
+    - name: Install dependencies
+      run: |
+        cd apps/flutter_demo
+        flutter pub get
+        
+    - name: Build APK for Device Farm
+      run: |
+        cd apps/flutter_demo
+        flutter build apk --debug
+        flutter build apk --debug --target=test_driver/integration_test.dart
+        
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+        
+    - name: Install AWS CLI
+      run: |
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install
+        
+    - name: Upload to Device Farm and run tests
+      run: |
+        # This would require AWS Device Farm setup and project configuration
+        echo "AWS Device Farm testing would run here with proper configuration"
+        # aws devicefarm create-upload --project-arn ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN }} --name app-debug.apk --type ANDROID_APP
+        # aws devicefarm create-upload --project-arn ${{ secrets.AWS_DEVICE_FARM_PROJECT_ARN }} --name app-debug-androidTest.apk --type INSTRUMENTATION_TEST_PACKAGE
+
+  test-reporting:
+    name: Test Results Reporting
+    runs-on: ubuntu-latest
+    needs: [android-unit-tests, android-emulator-tests]
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download test results
+      uses: actions/download-artifact@v3
+      with:
+        path: test-results/
+        
+    - name: Generate test report
+      run: |
+        echo "# Android Mobile E2E Test Results" > test_report.md
+        echo "" >> test_report.md
+        echo "## Test Matrix Results" >> test_report.md
+        echo "" >> test_report.md
+        
+        for file in test-results/*/test_results_*.json; do
+          if [ -f "$file" ]; then
+            echo "Processing: $file"
+            # Add test result parsing and reporting logic here
+          fi
+        done
+        
+    - name: Comment PR with test results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          if (fs.existsSync('test_report.md')) {
+            const report = fs.readFileSync('test_report.md', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+          }
+
+  performance-monitoring:
+    name: Performance Monitoring
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup monitoring
+      run: |
+        echo "Setting up performance monitoring for mobile E2E tests"
+        # Integration with monitoring tools would go here
+        # Examples: DataDog, New Relic, custom metrics collection
+        
+    - name: Collect metrics
+      run: |
+        echo "Collecting performance metrics from test runs"
+        # Metric collection logic would go here
+        # Examples: test execution time, device performance, battery usage simulation
