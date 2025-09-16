@@ -208,7 +208,7 @@ jobs:
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
         run: |
           cd test/e2e
-          dart run ../scripts/run_e2e_tests.dart --platform android --suite ${{ matrix.test_suite }} --cloud browserstack
+          dart run ../../scripts/run_e2e_tests.dart --platform android --suite ${{ matrix.test_suite }} --cloud browserstack
 
       - name: Run Android E2E tests (emulator)
         if: env.DEVICE_POOL == 'emulator'
@@ -226,7 +226,7 @@ jobs:
           disable-spellchecker: true
           script: |
             cd test/e2e
-            dart run ../scripts/run_e2e_tests.dart --platform android --suite ${{ matrix.test_suite }}
+            dart run ../../scripts/run_e2e_tests.dart --platform android --suite ${{ matrix.test_suite }}
 
       - name: Upload test results
         if: always()
@@ -332,7 +332,7 @@ jobs:
         if: env.DEVICE_POOL != 'cloud'
         run: |
           cd test/e2e
-          dart run ../scripts/run_e2e_tests.dart --platform ios --suite ${{ matrix.test_suite }}
+          dart run ../../scripts/run_e2e_tests.dart --platform ios --suite ${{ matrix.test_suite }}
 
       - name: Run iOS E2E tests (cloud)
         if: env.DEVICE_POOL == 'cloud'
@@ -341,7 +341,7 @@ jobs:
           BROWSERSTACK_ACCESS_KEY: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
         run: |
           cd test/e2e
-          dart run ../scripts/run_e2e_tests.dart --platform ios --suite ${{ matrix.test_suite }} --cloud browserstack
+          dart run ../../scripts/run_e2e_tests.dart --platform ios --suite ${{ matrix.test_suite }} --cloud browserstack
 
       - name: Upload test results
         if: always()
