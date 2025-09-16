@@ -45,15 +45,22 @@ class UuidGenerator {
 
   /// Validates if a string is a valid UUID format.
   ///
-  /// Returns true if the string matches the UUID pattern, false otherwise.
-  static bool isValidUuid(String? uuid) {
-    if (uuid == null) return false;
+  /// Returns true if the string matches the UUIDv4 pattern, false otherwise.
+  static bool isValidUuid(String uuid) {
+    if (uuid.length != 36) return false;
     
     final uuidRegex = RegExp(
-      r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
       caseSensitive: false,
     );
     
     return uuidRegex.hasMatch(uuid);
+  }
+
+  /// Validates ID length per Locked Spec (1-64 characters allowed).
+  ///
+  /// Returns true if the ID length is between 1 and 64 characters inclusive.
+  static bool isValidIdLength(String id) {
+    return id.length >= 1 && id.length <= 64;
   }
 }

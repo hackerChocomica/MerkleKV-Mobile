@@ -1,51 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
+import '../utils/uuid_generator.dart';
 import 'command.dart';
 import 'response.dart';
-
-/// UUIDv4 generator using cryptographically secure random numbers.
-class UuidGenerator {
-  static final Random _random = Random.secure();
-
-  /// Generates a canonical UUIDv4 string (36 characters).
-  ///
-  /// Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-  /// where x is any hexadecimal digit and y is one of 8, 9, A, or B.
-  static String generate() {
-    final bytes = List<int>.generate(16, (_) => _random.nextInt(256));
-
-    // Set version to 4 (UUID version 4)
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-
-    // Set variant to 10 (RFC 4122)
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-
-    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
-  }
-
-  /// Validates that a string is a canonical UUIDv4 format.
-  ///
-  /// Returns true if the ID is 36 characters and matches UUIDv4 pattern.
-  static bool isValidUuid(String id) {
-    if (id.length != 36) return false;
-
-    final regex = RegExp(
-      r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-      caseSensitive: false,
-    );
-
-    return regex.hasMatch(id);
-  }
-
-  /// Validates ID length per Locked Spec (1-64 characters allowed).
-  static bool isValidIdLength(String id) {
-    return id.length >= 1 && id.length <= 64;
-  }
-}
 
 /// Entry in the deduplication cache.
 class _CacheEntry {
