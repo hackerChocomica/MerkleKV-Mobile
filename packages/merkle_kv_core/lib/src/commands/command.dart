@@ -219,6 +219,49 @@ class Command {
   }
 
   // Convenience factory methods
+  /// Creates a GET command.
+  factory Command.get({
+    required String id,
+    required String key,
+  }) {
+    return Command(id: id, op: 'GET', key: key);
+  }
+
+  /// Creates a SET command.
+  factory Command.set({
+    required String id,
+    required String key,
+    required String value,
+  }) {
+    return Command(id: id, op: 'SET', key: key, value: value);
+  }
+
+  /// Creates a DELETE command.
+  factory Command.delete({
+    required String id,
+    required String key,
+  }) {
+    return Command(id: id, op: 'DEL', key: key);
+  }
+
+  /// Creates an INCREMENT command.
+  factory Command.increment({
+    required String id,
+    required String key,
+    required int amount,
+  }) {
+    return Command(id: id, op: 'INCR', key: key, amount: amount);
+  }
+
+  /// Creates a DECREMENT command.
+  factory Command.decrement({
+    required String id,
+    required String key,
+    required int amount,
+  }) {
+    return Command(id: id, op: 'DECR', key: key, amount: amount);
+  }
+
   /// Creates an INCR command with optional amount (default 1).
   factory Command.incr({
     required String id,

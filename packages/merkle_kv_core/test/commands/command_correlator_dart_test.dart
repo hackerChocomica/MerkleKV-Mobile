@@ -8,6 +8,7 @@ import 'package:test/test.dart';
 import '../../lib/src/commands/command.dart';
 import '../../lib/src/commands/response.dart';
 import '../../lib/src/commands/command_correlator.dart';
+import '../../lib/src/utils/uuid_generator.dart';
 
 void main() {
   group('UuidGenerator', () {
