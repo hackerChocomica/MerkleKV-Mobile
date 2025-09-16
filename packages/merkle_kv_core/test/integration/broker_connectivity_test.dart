@@ -1,30 +1,21 @@
 import 'package:test/test.dart';
 import 'package:merkle_kv_core/merkle_kv_core.dart';
-import 'config/test_config.dart';
+import 'test_config.dart';
 
 void main() {
   group('End-to-End MQTT Operations', () {
-    late TestConfig testConfig;
-
     setUpAll(() async {
-      testConfig = TestConfig.createDefault();
-      
       // Validate test environment
-      expect(testConfig.mosquittoHost, isNotEmpty, 
+      expect(IntegrationTestConfig.mosquittoHost, isNotEmpty, 
         reason: 'MQTT broker host must be configured');
-      expect(testConfig.mosquittoPort, greaterThan(0), 
+      expect(IntegrationTestConfig.mosquittoPort, greaterThan(0), 
         reason: 'MQTT broker port must be valid');
     });
 
     test('MQTT connection establishment with Mosquitto broker', () async {
-      final config = MerkleKVConfig(
+      final config = TestConfigurations.mosquittoBasic(
+        clientId: 'test-client-1',
         nodeId: 'test-node-1',
-        mqttHost: testConfig.mosquittoHost,
-        mqttPort: testConfig.mosquittoPort,
-        mqttUsername: testConfig.mqttUsername,
-        mqttPassword: testConfig.mqttPassword,
-        useTls: testConfig.useTls,
-        persistenceEnabled: false,
       );
 
       final mqttClient = MqttClientImpl(config);

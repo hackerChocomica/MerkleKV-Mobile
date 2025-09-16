@@ -85,7 +85,6 @@ Future<void> _testMqttHandshake(String host, int port) async {
     throw Exception('MQTT handshake failed: $e');
   }
 }
-}
 
 /// Build a minimal MQTT CONNECT packet for basic connectivity testing
 /// Note: This is a simplified implementation for test purposes only.
