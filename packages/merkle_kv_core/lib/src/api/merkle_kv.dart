@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:async' as async;
 import 'dart:isolate';
 
 import '../config/merkle_kv_config.dart';
@@ -60,11 +60,11 @@ class MerkleKV {
   
   // Thread safety
   final SendPort? _isolateSendPort;
-  final Map<String, Completer<Response>> _pendingOperations = {};
+  final Map<String, async.Completer<Response>> _pendingOperations = {};
   
   // Connection state management
-  final StreamController<ConnectionState> _connectionStateController = 
-      StreamController<ConnectionState>.broadcast();
+  final async.StreamController<ConnectionState> _connectionStateController = 
+      async.StreamController<ConnectionState>.broadcast();
   ConnectionState _currentConnectionState = ConnectionState.disconnected;
   
   // Command ID reuse for retries
@@ -193,7 +193,12 @@ class MerkleKV {
     );
     
     if (response.status == ResponseStatus.ok) {
-      return response.value as String?;
+      final value = response.value;
+      if (value == null || value is String) {
+        return value as String?;
+      } else {
+        throw InternalException('Expected String or null response value, got ${value.runtimeType}');
+      }
     } else if (response.errorCode == ErrorCode.notFound) {
       return null;
     } else {
@@ -265,7 +270,12 @@ class MerkleKV {
     );
     
     if (response.status == ResponseStatus.ok) {
-      return response.value as int;
+      final value = response.value;
+      if (value is int) {
+        return value;
+      } else {
+        throw InternalException('Expected int response value for increment, got ${value.runtimeType}');
+      }
     } else {
       _throwForResponse(response);
     }
@@ -291,7 +301,12 @@ class MerkleKV {
     );
     
     if (response.status == ResponseStatus.ok) {
-      return response.value as int;
+      final value = response.value;
+      if (value is int) {
+        return value;
+      } else {
+        throw InternalException('Expected int response value for decrement, got ${value.runtimeType}');
+      }
     } else {
       _throwForResponse(response);
     }
@@ -318,7 +333,12 @@ class MerkleKV {
     );
     
     if (response.status == ResponseStatus.ok) {
-      return response.value as int;
+      final value = response.value;
+      if (value is int) {
+        return value;
+      } else {
+        throw InternalException('Expected int response value for append, got ${value.runtimeType}');
+      }
     } else {
       _throwForResponse(response);
     }
@@ -345,7 +365,12 @@ class MerkleKV {
     );
     
     if (response.status == ResponseStatus.ok) {
-      return response.value as int;
+      final value = response.value;
+      if (value is int) {
+        return value;
+      } else {
+        throw InternalException('Expected int response value for prepend, got ${value.runtimeType}');
+      }
     } else {
       _throwForResponse(response);
     }
@@ -468,7 +493,7 @@ class MerkleKV {
   }
 
   Future<Response> _executeCommand(Command command, Duration timeout) async {
-    final completer = Completer<Response>();
+    final completer = async.Completer<Response>();
     _pendingOperations[command.id] = completer;
     
     try {
@@ -480,7 +505,7 @@ class MerkleKV {
       }
       
       return await completer.future.timeout(timeout);
-    } on TimeoutException {
+    } on async.TimeoutException {
       throw TimeoutException(
         'Operation timed out',
         operation: command.op,

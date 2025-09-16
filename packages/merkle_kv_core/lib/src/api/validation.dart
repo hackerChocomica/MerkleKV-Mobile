@@ -165,13 +165,13 @@ class InputValidator {
   /// Throws [ValidationException] if amount would cause integer overflow.
   static void validateAmount(int amount) {
     // Check for potential overflow scenarios
-    // Dart's int is 64-bit, so we check against safe bounds
-    const maxSafeInt = 9007199254740991; // 2^53 - 1 (JavaScript safe integer)
-    const minSafeInt = -9007199254740991;
+    // Dart's int is 64-bit signed, so we check against its actual bounds
+    const maxInt64 = 9223372036854775807; // 2^63 - 1
+    const minInt64 = -9223372036854775808; // -2^63
 
-    if (amount > maxSafeInt || amount < minSafeInt) {
+    if (amount > maxInt64 || amount < minInt64) {
       throw ValidationException(
-        'Amount exceeds safe integer bounds',
+        'Amount exceeds 64-bit integer bounds',
         field: 'amount',
         value: amount,
       );
