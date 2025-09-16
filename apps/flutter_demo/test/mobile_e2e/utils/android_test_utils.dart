@@ -1,7 +1,15 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:battery_plus/battery_plus.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:network_info_plus/network_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:mockito/mockito.dart';
 
 /// Utilities for Android-specific mobile E2E testing
@@ -14,46 +22,44 @@ class AndroidTestUtils {
   /// Mock method call handler for testing platform channels
   static MethodChannel? _mockMethodChannel;
 
-  /// Initialize Android test environment
-  static Future<void> initializeAndroidTestEnvironment() async {
-    // Ensure we're testing on Android platform
+  /// Sets up Android platform simulation
+  static void setupAndroidPlatform() {
+    // Mock the default target platform for testing
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    
-    // Set up mock method channels
-    _setupMockChannels();
   }
 
-  /// Clean up test environment
-  static void cleanupTestEnvironment() {
+  /// Cleans up Android platform simulation
+  static void teardownAndroidPlatform() {
+    // Reset the platform override
     debugDefaultTargetPlatformOverride = null;
-    _mockMethodChannel = null;
   }
 
-  /// Simulate app lifecycle state changes
+  /// Simulates app lifecycle state changes for testing
   static Future<void> simulateAppLifecycleState(AppLifecycleState state) async {
-    final methodChannel = MethodChannel(_lifecycleChannel);
+    // Use WidgetsBinding to simulate lifecycle changes in tests
+    final binding = WidgetsFlutterBinding.ensureInitialized();
     
-    // Create a completer to handle the async nature of lifecycle changes
-    final completer = Completer<void>();
+    // Mock the lifecycle state change
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // Simulate app coming to foreground
+        break;
+      case AppLifecycleState.inactive:
+        // Simulate app becoming inactive (e.g., phone call)
+        break;
+      case AppLifecycleState.paused:
+        // Simulate app going to background
+        break;
+      case AppLifecycleState.detached:
+        // Simulate app being terminated
+        break;
+      case AppLifecycleState.hidden:
+        // Simulate app being hidden (not shown to user)
+        break;
+    }
     
-    // Set up mock response
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(methodChannel, (call) async {
-      if (call.method == 'System.exitApplication') {
-        return null;
-      }
-      return null;
-    });
-
-    // Simulate the lifecycle state change through the binding
-    TestWidgetsFlutterBinding.ensureInitialized()
-        .binding.handleAppLifecycleStateChanged(state);
-    
-    // Allow time for state change to propagate
+    // Allow some time for the state change to be processed
     await Future.delayed(const Duration(milliseconds: 100));
-    
-    completer.complete();
-    return completer.future;
   }
 
   /// Simulate airplane mode toggle

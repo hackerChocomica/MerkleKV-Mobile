@@ -9,34 +9,22 @@ class MerkleKVMobileTestHelper {
   static const String defaultBrokerHost = 'localhost';
   static const int defaultBrokerPort = 1883;
 
-  /// Create a test MerkleKV configuration for mobile testing
-  static MerkleKVConfig createMobileTestConfig({
-    String? clientId,
-    String topicPrefix = defaultTopicPrefix,
-    String brokerHost = defaultBrokerHost,
-    int brokerPort = defaultBrokerPort,
-    Duration? antiEntropyIntervalMs,
-    bool enablePersistence = true,
+  /// Creates a configuration optimized for mobile testing
+  MerkleKVConfig createMobileOptimizedConfig({
+    String brokerHost = 'localhost',
+    int brokerPort = 1883,
   }) {
-    final config = MerkleKVConfig(
-      clientId: clientId ?? _generateTestClientId(),
-      topicPrefix: topicPrefix,
-      brokerHost: brokerHost,
-      brokerPort: brokerPort,
-      // Use reasonable intervals for mobile testing - not hard-coded latency targets
-      antiEntropyIntervalMs: antiEntropyIntervalMs?.inMilliseconds ?? 60000, // 1 minute
-      // Mobile-optimized timeouts based on Locked Spec
-      singleKeyTimeoutMs: 10000, // 10 seconds
-      multiKeyTimeoutMs: 20000,  // 20 seconds
-      syncTimeoutMs: 30000,      // 30 seconds
-      enablePersistence: enablePersistence,
-      // Mobile-friendly connection settings
-      maxReconnectionDelay: const Duration(minutes: 1),
-      connectionTimeout: const Duration(seconds: 30),
-      keepAliveInterval: const Duration(seconds: 60),
+    final testClientId = 'test_mobile_client_${DateTime.now().millisecondsSinceEpoch}';
+    
+    return MerkleKVConfig(
+      mqttHost: brokerHost,
+      mqttPort: brokerPort,
+      clientId: testClientId,
+      nodeId: testClientId,
+      username: null,
+      password: null,
+      topicPrefix: 'merkle_kv_mobile_test',
     );
-
-    return config;
   }
 
   /// Create multiple test clients for multi-device testing
@@ -47,11 +35,14 @@ class MerkleKVMobileTestHelper {
     int brokerPort = defaultBrokerPort,
   }) {
     return List.generate(clientCount, (index) {
-      return createMobileTestConfig(
+      return MerkleKVConfig(
+        mqttHost: brokerHost,
+        mqttPort: brokerPort,
         clientId: 'mobile_test_client_$index',
+        nodeId: 'mobile_test_client_$index',
+        username: null,
+        password: null,
         topicPrefix: topicPrefix,
-        brokerHost: brokerHost,
-        brokerPort: brokerPort,
       );
     });
   }
