@@ -123,6 +123,10 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Install MQTT tools and system dependencies
+          sudo apt-get update
+          sudo apt-get install -y mosquitto-clients
+          
           # Install Node.js dependencies
           npm install
           
@@ -280,6 +284,9 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Install MQTT tools and system dependencies
+          brew install mosquitto
+          
           # Install Node.js dependencies
           npm install
           
@@ -381,6 +388,10 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Install MQTT tools and system dependencies
+          sudo apt-get update
+          sudo apt-get install -y mosquitto-clients
+          
           cd apps/flutter_demo
           flutter pub get
           cd ../../
