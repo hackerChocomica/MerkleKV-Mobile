@@ -4,6 +4,7 @@
 tags:
   integration:
     description: "Integration tests that require external dependencies (e.g., MQTT broker)"
+    timeout: 60s  # Longer timeout for integration tests
 
 # Default test configuration
 timeout: 30s

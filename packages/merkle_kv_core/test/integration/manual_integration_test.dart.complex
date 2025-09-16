@@ -44,10 +44,11 @@ Future<void> _testMosquittoConnection(String host, int port, Duration timeout) a
   print('  • Testing connection to $host:$port...');
   
   final config = MerkleKVConfig(
-    nodeId: 'integration-test-node',
     mqttHost: host,
     mqttPort: port,
-    useTls: false,
+    clientId: 'integration-test-client',
+    nodeId: 'integration-test-node',
+    mqttUseTls: false,
     persistenceEnabled: false,
   );
 

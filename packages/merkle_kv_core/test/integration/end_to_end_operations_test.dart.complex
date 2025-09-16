@@ -27,8 +27,9 @@ void main() {
           );
           
           final mqttClient = MqttClientImpl(config);
-          final storage = InMemoryKVStorage();
-          final commandProcessor = CommandProcessor(storage: storage);
+          final storage = InMemoryStorage(config);
+          await storage.initialize();
+          final commandProcessor = CommandProcessorImpl(config, storage);
           final correlator = CommandCorrelator(
             publishCommand: (jsonPayload) async {
               // For integration test, we'll handle response manually

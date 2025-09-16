@@ -45,11 +45,14 @@ void main() {
         final mqttClient1 = MqttClientImpl(config1);
         final mqttClient2 = MqttClientImpl(config2);
         
-        final storage1 = InMemoryKVStorage();
-        final storage2 = InMemoryKVStorage();
+        final storage1 = InMemoryStorage(config1);
+        final storage2 = InMemoryStorage(config2);
         
-        final processor1 = CommandProcessor(storage: storage1);
-        final processor2 = CommandProcessor(storage: storage2);
+        await storage1.initialize();
+        await storage2.initialize();
+        
+        final processor1 = CommandProcessorImpl(config1, storage1);
+        final processor2 = CommandProcessorImpl(config2, storage2);
         
         // Track replication events
         final replicationEvents1 = <String>[];
