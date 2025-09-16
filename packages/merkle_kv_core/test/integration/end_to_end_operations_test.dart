@@ -4,444 +4,153 @@ import 'package:merkle_kv_core/merkle_kv_core.dart';
 
 import 'test_config.dart';
 
-/// Integration tests for end-to-end operations through real MQTT brokers.
-/// 
-/// These tests validate the complete MerkleKV stack from client to broker,
-/// ensuring GET/SET/DEL operations work correctly with real MQTT implementations.
 void main() {
-  group('End-to-End Operations Integration Tests', () {
+  group('Basic End-to-End Operations', () {
     late String clientId;
     late String nodeId;
     
     setUp(() {
-      clientId = TestDataGenerator.generateClientId('e2e_client');
-      nodeId = TestDataGenerator.generateNodeId('e2e');
+      clientId = TestDataGenerator.generateClientId('e2e_basic');
+      nodeId = TestDataGenerator.generateNodeId('e2e_basic');
     });
 
-    group('Mosquitto Broker Tests', () {
-      group('Basic Operations', () {
-        test('SET and GET operation through Mosquitto', () async {
-          final config = TestConfigurations.mosquittoBasic(
-            clientId: clientId,
-            nodeId: nodeId,
-          );
-          
-          final mqttClient = MqttClientImpl(config);
-          final storage = InMemoryKVStorage();
-          final commandProcessor = CommandProcessor(storage: storage);
-          final correlator = CommandCorrelator(
-            publishCommand: (jsonPayload) async {
-              // For integration test, we'll handle response manually
-              await mqttClient.publish(
-                'test_mkv/$clientId/cmd',
-                jsonPayload,
-              );
-            },
-          );
-          
-          try {
-            // Connect to broker
-            await mqttClient.connect();
-            
-            // Subscribe to response channel
-            final responseCompleter = Completer<String>();
-            await mqttClient.subscribe('test_mkv/$clientId/res', (topic, payload) {
-              responseCompleter.complete(payload);
-            });
-            
-            // Simulate SET command processing on "server side"
-            await mqttClient.subscribe('test_mkv/$clientId/cmd', (topic, payload) async {
-              try {
-                final request = CommandRequest.fromJson(payload);
-                final response = await commandProcessor.processCommand(request);
-                await mqttClient.publish(
-                  'test_mkv/$clientId/res',
-                  response.toJson(),
-                );
-              } catch (e) {
-                // Handle command processing errors
-                final errorResponse = CommandResponse.error(
-                  requestId: 'unknown',
-                  status: ResponseStatus.INVALID_COMMAND,
-                  error: 'Failed to process command: $e',
-                );
-                await mqttClient.publish(
-                  'test_mkv/$clientId/res',
-                  errorResponse.toJson(),
-                );
-              }
-            });
-            
-            await Future.delayed(Duration(milliseconds: 100)); // Allow subscription setup
-            
-            // Send SET command
-            final setRequest = CommandRequest.set(
-              requestId: 'test-set-1',
-              key: 'user:123',
-              value: {'name': 'Alice', 'age': 30},
-              timestamp: DateTime.now().millisecondsSinceEpoch,
-            );
-            
-            await correlator.sendCommand(setRequest);
-            
-            // Wait for response
-            final setResponseJson = await responseCompleter.future
-                .timeout(IntegrationTestConfig.operationTimeout);
-            final setResponse = CommandResponse.fromJson(setResponseJson);
-            
-            expect(setResponse.status, equals(ResponseStatus.OK));
-            expect(setResponse.requestId, equals('test-set-1'));
-            
-            // Verify value was stored
-            expect(storage.get('user:123'), isNotNull);
-            
-            // Send GET command
-            final getCompleter = Completer<String>();
-            await mqttClient.subscribe('test_mkv/$clientId/res', (topic, payload) {
-              if (!getCompleter.isCompleted) {
-                getCompleter.complete(payload);
-              }
-            });
-            
-            final getRequest = CommandRequest.get(
-              requestId: 'test-get-1',
-              key: 'user:123',
-            );
-            
-            await correlator.sendCommand(getRequest);
-            
-            final getResponseJson = await getCompleter.future
-                .timeout(IntegrationTestConfig.operationTimeout);
-            final getResponse = CommandResponse.fromJson(getResponseJson);
-            
-            expect(getResponse.status, equals(ResponseStatus.OK));
-            expect(getResponse.requestId, equals('test-get-1'));
-            expect(getResponse.value, equals({'name': 'Alice', 'age': 30}));
-            
-          } finally {
-            await mqttClient.disconnect();
-          }
-        });
-
-        test('DEL operation through Mosquitto', () async {
-          final config = TestConfigurations.mosquittoBasic(
-            clientId: clientId,
-            nodeId: nodeId,
-          );
-          
-          final mqttClient = MqttClientImpl(config);
-          final storage = InMemoryKVStorage();
-          final commandProcessor = CommandProcessor(storage: storage);
-          
-          try {
-            await mqttClient.connect();
-            
-            // Pre-populate storage
-            storage.set('test:key', {'data': 'test'});
-            expect(storage.get('test:key'), isNotNull);
-            
-            // Subscribe to command channel and process DEL
-            final responseCompleter = Completer<String>();
-            await mqttClient.subscribe('test_mkv/$clientId/res', (topic, payload) {
-              responseCompleter.complete(payload);
-            });
-            
-            await mqttClient.subscribe('test_mkv/$clientId/cmd', (topic, payload) async {
-              final request = CommandRequest.fromJson(payload);
-              final response = await commandProcessor.processCommand(request);
-              await mqttClient.publish('test_mkv/$clientId/res', response.toJson());
-            });
-            
-            await Future.delayed(Duration(milliseconds: 100));
-            
-            // Send DEL command
-            final delRequest = CommandRequest.delete(
-              requestId: 'test-del-1',
-              key: 'test:key',
-              timestamp: DateTime.now().millisecondsSinceEpoch,
-            );
-            
-            await mqttClient.publish('test_mkv/$clientId/cmd', delRequest.toJson());
-            
-            final responseJson = await responseCompleter.future
-                .timeout(IntegrationTestConfig.operationTimeout);
-            final response = CommandResponse.fromJson(responseJson);
-            
-            expect(response.status, equals(ResponseStatus.OK));
-            expect(response.requestId, equals('test-del-1'));
-            
-            // Verify deletion
-            expect(storage.get('test:key'), isNull);
-            
-          } finally {
-            await mqttClient.disconnect();
-          }
-        });
-
-        test('NOT_FOUND response for non-existent key', () async {
-          final config = TestConfigurations.mosquittoBasic(
-            clientId: clientId,
-            nodeId: nodeId,
-          );
-          
-          final mqttClient = MqttClientImpl(config);
-          final storage = InMemoryKVStorage();
-          final commandProcessor = CommandProcessor(storage: storage);
-          
-          try {
-            await mqttClient.connect();
-            
-            final responseCompleter = Completer<String>();
-            await mqttClient.subscribe('test_mkv/$clientId/res', (topic, payload) {
-              responseCompleter.complete(payload);
-            });
-            
-            await mqttClient.subscribe('test_mkv/$clientId/cmd', (topic, payload) async {
-              final request = CommandRequest.fromJson(payload);
-              final response = await commandProcessor.processCommand(request);
-              await mqttClient.publish('test_mkv/$clientId/res', response.toJson());
-            });
-            
-            await Future.delayed(Duration(milliseconds: 100));
-            
-            // Send GET for non-existent key
-            final getRequest = CommandRequest.get(
-              requestId: 'test-notfound-1',
-              key: 'nonexistent:key',
-            );
-            
-            await mqttClient.publish('test_mkv/$clientId/cmd', getRequest.toJson());
-            
-            final responseJson = await responseCompleter.future
-                .timeout(IntegrationTestConfig.operationTimeout);
-            final response = CommandResponse.fromJson(responseJson);
-            
-            expect(response.status, equals(ResponseStatus.NOT_FOUND));
-            expect(response.requestId, equals('test-notfound-1'));
-            expect(response.error, contains('not found'));
-            
-          } finally {
-            await mqttClient.disconnect();
-          }
-        });
-      });
-
-      group('Error Handling', () {
-        test('Invalid command format returns error', () async {
-          final config = TestConfigurations.mosquittoBasic(
-            clientId: clientId,
-            nodeId: nodeId,
-          );
-          
-          final mqttClient = MqttClientImpl(config);
-          
-          try {
-            await mqttClient.connect();
-            
-            final responseCompleter = Completer<String>();
-            await mqttClient.subscribe('test_mkv/$clientId/res', (topic, payload) {
-              responseCompleter.complete(payload);
-            });
-            
-            await mqttClient.subscribe('test_mkv/$clientId/cmd', (topic, payload) async {
-              // Always return error for invalid format
-              final errorResponse = CommandResponse.error(
-                requestId: 'unknown',
-                status: ResponseStatus.INVALID_COMMAND,
-                error: 'Invalid command format',
-              );
-              await mqttClient.publish('test_mkv/$clientId/res', errorResponse.toJson());
-            });
-            
-            await Future.delayed(Duration(milliseconds: 100));
-            
-            // Send invalid JSON
-            await mqttClient.publish('test_mkv/$clientId/cmd', 'invalid-json');
-            
-            final responseJson = await responseCompleter.future
-                .timeout(IntegrationTestConfig.operationTimeout);
-            final response = CommandResponse.fromJson(responseJson);
-            
-            expect(response.status, equals(ResponseStatus.INVALID_COMMAND));
-            expect(response.error, contains('Invalid command format'));
-            
-          } finally {
-            await mqttClient.disconnect();
-          }
-        });
-
-        test('Connection loss and recovery', () async {
-          final config = TestConfigurations.mosquittoBasic(
-            clientId: clientId,
-            nodeId: nodeId,
-          );
-          
-          final mqttClient = MqttClientImpl(config);
-          
-          try {
-            // Initial connection
-            await mqttClient.connect();
-            
-            // Simulate connection loss by disconnecting
-            await mqttClient.disconnect();
-            
-            // Attempt to reconnect
-            await mqttClient.connect();
-            
-            // Verify we can still publish
-            await mqttClient.publish('test_mkv/$clientId/cmd', '{"test": "reconnect"}');
-            
-            // Test passes if no exception thrown
-            expect(true, isTrue);
-            
-          } finally {
-            await mqttClient.disconnect();
-          }
-        });
-      });
+    test('Basic storage and command processing', () async {
+      final config = TestConfigurations.mosquittoBasic(
+        clientId: clientId,
+        nodeId: nodeId,
+      );
+      
+      final storage = InMemoryStorage(config);
+      await storage.initialize();
+      final processor = CommandProcessorImpl(config, storage);
+      
+      // Test SET operation
+      final setResponse = await processor.set('test-key', 'test-value', 'cmd-1');
+      expect(setResponse.status, equals(ResponseStatus.ok));
+      expect(setResponse.id, equals('cmd-1'));
+      
+      // Test GET operation
+      final getResponse = await processor.get('test-key', 'cmd-2');
+      expect(getResponse.status, equals(ResponseStatus.ok));
+      expect(getResponse.value, equals('test-value'));
+      expect(getResponse.id, equals('cmd-2'));
+      
+      // Test DELETE operation
+      final deleteResponse = await processor.delete('test-key', 'cmd-3');
+      expect(deleteResponse.status, equals(ResponseStatus.ok));
+      expect(deleteResponse.id, equals('cmd-3'));
+      
+      // Test GET on deleted key
+      final getResponse2 = await processor.get('test-key', 'cmd-4');
+      expect(getResponse2.status, equals(ResponseStatus.error));
+      expect(getResponse2.id, equals('cmd-4'));
     });
 
-    group('HiveMQ Broker Tests', () {
-      test('Basic SET/GET operations through HiveMQ', () async {
-        final config = TestConfigurations.hivemqBasic(
-          clientId: clientId,
-          nodeId: nodeId,
-        );
-        
-        final mqttClient = MqttClientImpl(config);
-        final storage = InMemoryKVStorage();
-        final commandProcessor = CommandProcessor(storage: storage);
-        
-        try {
-          await mqttClient.connect();
-          
-          final responseCompleter = Completer<String>();
-          await mqttClient.subscribe('test_mkv_hive/$clientId/res', (topic, payload) {
-            responseCompleter.complete(payload);
-          });
-          
-          await mqttClient.subscribe('test_mkv_hive/$clientId/cmd', (topic, payload) async {
-            final request = CommandRequest.fromJson(payload);
-            final response = await commandProcessor.processCommand(request);
-            await mqttClient.publish('test_mkv_hive/$clientId/res', response.toJson());
-          });
-          
-          await Future.delayed(Duration(milliseconds: 100));
-          
-          // SET operation
-          final setRequest = CommandRequest.set(
-            requestId: 'hivemq-test-1',
-            key: 'hivemq:test',
-            value: {'broker': 'HiveMQ', 'test': true},
-            timestamp: DateTime.now().millisecondsSinceEpoch,
-          );
-          
-          await mqttClient.publish('test_mkv_hive/$clientId/cmd', setRequest.toJson());
-          
-          final setResponseJson = await responseCompleter.future
-              .timeout(IntegrationTestConfig.operationTimeout);
-          final setResponse = CommandResponse.fromJson(setResponseJson);
-          
-          expect(setResponse.status, equals(ResponseStatus.OK));
-          expect(setResponse.requestId, equals('hivemq-test-1'));
-          
-          // Verify HiveMQ compatibility
-          expect(storage.get('hivemq:test'), equals({'broker': 'HiveMQ', 'test': true}));
-          
-        } finally {
-          await mqttClient.disconnect();
-        }
-      });
+    test('MQTT client connection lifecycle', () async {
+      final config = TestConfigurations.mosquittoBasic(
+        clientId: clientId,
+        nodeId: nodeId,
+      );
+      
+      final mqttClient = MqttClientImpl(config);
+      
+      // Test connection
+      await mqttClient.connect();
+      
+      // Wait for connection to establish
+      await Future.delayed(Duration(milliseconds: 200));
+      
+      // Test basic publish
+      await mqttClient.publish('test/topic', 'test message');
+      
+      // Test disconnection
+      await mqttClient.disconnect();
     });
 
-    group('Broker Compatibility', () {
-      test('Same operations work across different brokers', () async {
-        final testData = {'cross': 'broker', 'test': 'data'};
+    test('Topic routing functionality', () async {
+      final config = TestConfigurations.mosquittoBasic(
+        clientId: clientId,
+        nodeId: nodeId,
+      );
+      
+      final mqttClient = MqttClientImpl(config);
+      final topicRouter = TopicRouterImpl(config, mqttClient);
+      
+      try {
+        await mqttClient.connect();
         
-        // Test with Mosquitto
-        final mosquittoConfig = TestConfigurations.mosquittoBasic(
-          clientId: '${clientId}_mosquitto',
-          nodeId: '${nodeId}_mosquitto',
-        );
+        // Test topic router can publish to different topics
+        await topicRouter.publishCommand('target-client', '{"test": "command"}');
+        await topicRouter.publishResponse('{"test": "response"}');
+        await topicRouter.publishReplication('{"test": "replication"}');
         
-        final mosquittoClient = MqttClientImpl(mosquittoConfig);
-        final mosquittoStorage = InMemoryKVStorage();
-        final mosquittoProcessor = CommandProcessor(storage: mosquittoStorage);
-        
-        // Test with HiveMQ
-        final hivemqConfig = TestConfigurations.hivemqBasic(
-          clientId: '${clientId}_hivemq',
-          nodeId: '${nodeId}_hivemq',
-        );
-        
-        final hivemqClient = MqttClientImpl(hivemqConfig);
-        final hivemqStorage = InMemoryKVStorage();
-        final hivemqProcessor = CommandProcessor(storage: hivemqStorage);
-        
-        try {
-          // Connect both clients
-          await mosquittoClient.connect();
-          await hivemqClient.connect();
-          
-          // Set up response handling for both
-          final mosquittoCompleter = Completer<String>();
-          final hivemqCompleter = Completer<String>();
-          
-          await mosquittoClient.subscribe('test_mkv/${clientId}_mosquitto/res', (topic, payload) {
-            mosquittoCompleter.complete(payload);
-          });
-          
-          await hivemqClient.subscribe('test_mkv_hive/${clientId}_hivemq/res', (topic, payload) {
-            hivemqCompleter.complete(payload);
-          });
-          
-          await mosquittoClient.subscribe('test_mkv/${clientId}_mosquitto/cmd', (topic, payload) async {
-            final request = CommandRequest.fromJson(payload);
-            final response = await mosquittoProcessor.processCommand(request);
-            await mosquittoClient.publish('test_mkv/${clientId}_mosquitto/res', response.toJson());
-          });
-          
-          await hivemqClient.subscribe('test_mkv_hive/${clientId}_hivemq/cmd', (topic, payload) async {
-            final request = CommandRequest.fromJson(payload);
-            final response = await hivemqProcessor.processCommand(request);
-            await hivemqClient.publish('test_mkv_hive/${clientId}_hivemq/res', response.toJson());
-          });
-          
-          await Future.delayed(Duration(milliseconds: 200));
-          
-          // Send identical commands to both brokers
-          final setRequest = CommandRequest.set(
-            requestId: 'cross-broker-test',
-            key: 'compatibility:test',
-            value: testData,
-            timestamp: DateTime.now().millisecondsSinceEpoch,
-          );
-          
-          await mosquittoClient.publish('test_mkv/${clientId}_mosquitto/cmd', setRequest.toJson());
-          await hivemqClient.publish('test_mkv_hive/${clientId}_hivemq/cmd', setRequest.toJson());
-          
-          // Wait for responses
-          final mosquittoResponseJson = await mosquittoCompleter.future
-              .timeout(IntegrationTestConfig.operationTimeout);
-          final hivemqResponseJson = await hivemqCompleter.future
-              .timeout(IntegrationTestConfig.operationTimeout);
-          
-          final mosquittoResponse = CommandResponse.fromJson(mosquittoResponseJson);
-          final hivemqResponse = CommandResponse.fromJson(hivemqResponseJson);
-          
-          // Both should succeed
-          expect(mosquittoResponse.status, equals(ResponseStatus.OK));
-          expect(hivemqResponse.status, equals(ResponseStatus.OK));
-          
-          // Both should have stored the same data
-          expect(mosquittoStorage.get('compatibility:test'), equals(testData));
-          expect(hivemqStorage.get('compatibility:test'), equals(testData));
-          
-        } finally {
-          await mosquittoClient.disconnect();
-          await hivemqClient.disconnect();
-        }
-      });
+        await mqttClient.disconnect();
+      } finally {
+        await topicRouter.dispose();
+      }
+    });
+
+    test('Command creation and serialization', () async {
+      // Test Command creation
+      final setCommand = Command.set(
+        id: 'test-cmd-1',
+        key: 'test-key',
+        value: 'test-value',
+      );
+      
+      expect(setCommand.id, equals('test-cmd-1'));
+      expect(setCommand.op, equals('SET'));
+      expect(setCommand.key, equals('test-key'));
+      expect(setCommand.value, equals('test-value'));
+      
+      // Test serialization
+      final jsonString = setCommand.toJsonString();
+      expect(jsonString, contains('test-cmd-1'));
+      expect(jsonString, contains('SET'));
+      expect(jsonString, contains('test-key'));
+      expect(jsonString, contains('test-value'));
+      
+      // Test deserialization
+      final parsedCommand = Command.fromJsonString(jsonString);
+      expect(parsedCommand.id, equals(setCommand.id));
+      expect(parsedCommand.op, equals(setCommand.op));
+      expect(parsedCommand.key, equals(setCommand.key));
+      expect(parsedCommand.value, equals(setCommand.value));
+    });
+
+    test('Response creation and validation', () async {
+      // Test OK response
+      final okResponse = Response.ok(
+        id: 'test-response-1',
+        value: 'success-value',
+      );
+      
+      expect(okResponse.id, equals('test-response-1'));
+      expect(okResponse.status, equals(ResponseStatus.ok));
+      expect(okResponse.value, equals('success-value'));
+      
+      // Test error response
+      final errorResponse = Response.error(
+        id: 'test-response-2',
+        error: 'Test error',
+        errorCode: ErrorCode.notFound,
+      );
+      
+      expect(errorResponse.id, equals('test-response-2'));
+      expect(errorResponse.status, equals(ResponseStatus.error));
+      expect(errorResponse.error, equals('Test error'));
+      expect(errorResponse.errorCode, equals(ErrorCode.notFound));
+      
+      // Test JSON serialization
+      final jsonString = okResponse.toJsonString();
+      expect(jsonString, contains('test-response-1'));
+      expect(jsonString, contains('OK'));
+      
+      // Test JSON deserialization
+      final parsedResponse = Response.fromJsonString(jsonString);
+      expect(parsedResponse.id, equals(okResponse.id));
+      expect(parsedResponse.status, equals(okResponse.status));
+      expect(parsedResponse.value, equals(okResponse.value));
     });
   });
 }

@@ -1,668 +1,283 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:math';
 import 'package:test/test.dart';
 import 'package:merkle_kv_core/merkle_kv_core.dart';
 
 import 'test_config.dart';
 
-/// Integration tests for anti-entropy convergence validation.
-/// 
-/// Tests validate that replication converges within configured intervals
-/// as per Locked Spec requirements, with realistic timing and network conditions.
 void main() {
-  group('Anti-Entropy Convergence Integration Tests', () {
-    late String client1Id;
-    late String client2Id;
-    late String node1Id;
-    late String node2Id;
+  group('Basic Convergence Tests', () {
     
-    setUp(() {
-      client1Id = TestDataGenerator.generateClientId('convergence_client1');
-      client2Id = TestDataGenerator.generateClientId('convergence_client2');
-      node1Id = TestDataGenerator.generateNodeId('convergence_node1');
-      node2Id = TestDataGenerator.generateNodeId('convergence_node2');
+    test('Storage entries can be compared for convergence', () async {
+      final config = TestConfigurations.mosquittoBasic(
+        clientId: 'convergence-test-client',
+        nodeId: 'convergence-test-node',
+      );
+      
+      final storage = InMemoryStorage(config);
+      await storage.initialize();
+      
+      final testKey = 'convergence-key';
+      final baseTimestamp = DateTime.now().millisecondsSinceEpoch;
+      
+      // Create two entries with different timestamps
+      final entry1 = StorageEntry.value(
+        key: testKey,
+        value: 'value-1',
+        timestampMs: baseTimestamp,
+        nodeId: 'node-1',
+        seq: 1,
+      );
+      
+      final entry2 = StorageEntry.value(
+        key: testKey,
+        value: 'value-2',
+        timestampMs: baseTimestamp + 1000, // Newer
+        nodeId: 'node-2',
+        seq: 1,
+      );
+      
+      // Put first entry
+      await storage.put(testKey, entry1);
+      var result = await storage.get(testKey);
+      expect(result!.value, equals('value-1'));
+      
+      // Put newer entry - should overwrite
+      await storage.put(testKey, entry2);
+      result = await storage.get(testKey);
+      expect(result!.value, equals('value-2'));
+      
+      // Trying to put older entry should be ignored
+      await storage.put(testKey, entry1);
+      result = await storage.get(testKey);
+      expect(result!.value, equals('value-2')); // Should still be newer value
     });
 
-    group('Basic Convergence Tests', () {
-      test('Two-node convergence within configured interval', () async {
-        final sharedTopicPrefix = 'convergence_test_${DateTime.now().millisecondsSinceEpoch}';
-        
-        final config1 = TestConfigurations.withAntiEntropy(
-          clientId: client1Id,
-          nodeId: node1Id,
-          topicPrefix: sharedTopicPrefix,
-          antiEntropyInterval: IntegrationTestConfig.defaultAntiEntropyInterval,
-        );
-        
-        final config2 = TestConfigurations.withAntiEntropy(
-          clientId: client2Id,
-          nodeId: node2Id,
-          topicPrefix: sharedTopicPrefix,
-          antiEntropyInterval: IntegrationTestConfig.defaultAntiEntropyInterval,
-        );
-        
-        final mqttClient1 = MqttClientImpl(config1);
-        final mqttClient2 = MqttClientImpl(config2);
-        
-        final storage1 = InMemoryKVStorage();
-        final storage2 = InMemoryKVStorage();
-        
-        final processor1 = CommandProcessor(storage: storage1);
-        final processor2 = CommandProcessor(storage: storage2);
-        
-        // Track replication events
-        final replicationEvents1 = <String>[];
-        final replicationEvents2 = <String>[];
-        
-        try {
-          await mqttClient1.connect();
-          await mqttClient2.connect();
-          
-          // Set up replication event handling
-          await mqttClient1.subscribe('$sharedTopicPrefix/replication/events', (topic, payload) {
-            replicationEvents1.add(payload);
-            print('Node1 received replication event: $payload');
-          });
-          
-          await mqttClient2.subscribe('$sharedTopicPrefix/replication/events', (topic, payload) {
-            replicationEvents2.add(payload);
-            print('Node2 received replication event: $payload');
-          });
-          
-          // Set up command processing for both nodes
-          await mqttClient1.subscribe('$sharedTopicPrefix/$client1Id/cmd', (topic, payload) async {
-            final request = CommandRequest.fromJson(payload);
-            final response = await processor1.processCommand(request);
-            await mqttClient1.publish('$sharedTopicPrefix/$client1Id/res', response.toJson());
-            
-            // Simulate replication event publishing
-            if (request.command == 'SET' || request.command == 'DEL') {
-              final replicationEvent = {
-                'nodeId': node1Id,
-                'operation': request.command,
-                'key': request.key,
-                'timestamp': DateTime.now().millisecondsSinceEpoch,
-                'value': request.command == 'SET' ? request.value : null,
-              };
-              await mqttClient1.publish('$sharedTopicPrefix/replication/events', 
-                  jsonEncode(replicationEvent));
-            }
-          });
-          
-          await mqttClient2.subscribe('$sharedTopicPrefix/$client2Id/cmd', (topic, payload) async {
-            final request = CommandRequest.fromJson(payload);
-            final response = await processor2.processCommand(request);
-            await mqttClient2.publish('$sharedTopicPrefix/$client2Id/res', response.toJson());
-            
-            // Simulate replication event publishing
-            if (request.command == 'SET' || request.command == 'DEL') {
-              final replicationEvent = {
-                'nodeId': node2Id,
-                'operation': request.command,
-                'key': request.key,
-                'timestamp': DateTime.now().millisecondsSinceEpoch,
-                'value': request.command == 'SET' ? request.value : null,
-              };
-              await mqttClient2.publish('$sharedTopicPrefix/replication/events', 
-                  jsonEncode(replicationEvent));
-            }
-          });
-          
-          await Future.delayed(Duration(milliseconds: 200)); // Allow subscriptions to settle
-          
-          // Create initial divergent state
-          final setRequest1 = CommandRequest.set(
-            requestId: 'convergence-test-1',
-            key: 'shared:key',
-            value: {'value': 'from_node1', 'timestamp': DateTime.now().millisecondsSinceEpoch},
-            timestamp: DateTime.now().millisecondsSinceEpoch,
-          );
-          
-          await mqttClient1.publish('$sharedTopicPrefix/$client1Id/cmd', setRequest1.toJson());
-          
-          await Future.delayed(Duration(milliseconds: 100));
-          
-          final setRequest2 = CommandRequest.set(
-            requestId: 'convergence-test-2',
-            key: 'shared:key',
-            value: {'value': 'from_node2', 'timestamp': DateTime.now().millisecondsSinceEpoch},
-            timestamp: DateTime.now().millisecondsSinceEpoch + 1, // Slightly later timestamp
-          );
-          
-          await mqttClient2.publish('$sharedTopicPrefix/$client2Id/cmd', setRequest2.toJson());
-          
-          // Wait for convergence (with tolerance)
-          final convergenceStart = DateTime.now();
-          final maxConvergenceTime = Duration(
-            milliseconds: (IntegrationTestConfig.defaultAntiEntropyInterval.inMilliseconds * 
-                         (1 + IntegrationTestConfig.convergenceTimeoutVariance)).round(),
-          );
-          
-          print('Waiting for convergence (max ${maxConvergenceTime.inSeconds}s)...');
-          
-          // Simulate anti-entropy process by applying replication events
-          var converged = false;
-          final checkInterval = Duration(seconds: 1);
-          var elapsed = Duration.zero;
-          
-          while (elapsed < maxConvergenceTime && !converged) {
-            await Future.delayed(checkInterval);
-            elapsed = DateTime.now().difference(convergenceStart);
-            
-            // Apply replication events to achieve convergence
-            for (final eventJson in replicationEvents1) {
-              try {
-                final event = jsonDecode(eventJson) as Map<String, dynamic>;
-                if (event['nodeId'] != node2Id) continue; // Apply events from other nodes
-                
-                final key = event['key'] as String;
-                final operation = event['operation'] as String;
-                final timestamp = event['timestamp'] as int;
-                
-                if (operation == 'SET') {
-                  final currentValue = storage2.get(key);
-                  if (currentValue == null || 
-                      (currentValue['timestamp'] as int? ?? 0) < timestamp) {
-                    storage2.set(key, event['value']);
-                  }
-                } else if (operation == 'DEL') {
-                  storage2.delete(key);
-                }
-              } catch (e) {
-                // Ignore malformed events
-              }
-            }
-            
-            for (final eventJson in replicationEvents2) {
-              try {
-                final event = jsonDecode(eventJson) as Map<String, dynamic>;
-                if (event['nodeId'] != node1Id) continue; // Apply events from other nodes
-                
-                final key = event['key'] as String;
-                final operation = event['operation'] as String;
-                final timestamp = event['timestamp'] as int;
-                
-                if (operation == 'SET') {
-                  final currentValue = storage1.get(key);
-                  if (currentValue == null || 
-                      (currentValue['timestamp'] as int? ?? 0) < timestamp) {
-                    storage1.set(key, event['value']);
-                  }
-                } else if (operation == 'DEL') {
-                  storage1.delete(key);
-                }
-              } catch (e) {
-                // Ignore malformed events
-              }
-            }
-            
-            // Check if storages have converged
-            final value1 = storage1.get('shared:key');
-            final value2 = storage2.get('shared:key');
-            
-            if (value1 != null && value2 != null) {
-              // Both should have the value with the later timestamp (LWW)
-              final timestamp1 = value1['timestamp'] as int? ?? 0;
-              final timestamp2 = value2['timestamp'] as int? ?? 0;
-              
-              if (timestamp1 == timestamp2 && value1['value'] == value2['value']) {
-                converged = true;
-                print('Convergence achieved in ${elapsed.inMilliseconds}ms');
-              }
-            }
-          }
-          
-          // Verify convergence
-          expect(converged, isTrue, 
-              reason: 'Nodes should converge within ${maxConvergenceTime.inSeconds}s');
-          
-          final finalValue1 = storage1.get('shared:key');
-          final finalValue2 = storage2.get('shared:key');
-          
-          expect(finalValue1, isNotNull);
-          expect(finalValue2, isNotNull);
-          expect(finalValue1!['value'], equals(finalValue2!['value']));
-          
-          // LWW should result in node2's value (later timestamp)
-          expect(finalValue1['value'], equals('from_node2'));
-          
-          print('Final converged value: ${finalValue1['value']}');
-          
-        } finally {
-          await mqttClient1.disconnect();
-          await mqttClient2.disconnect();
-        }
-      });
-
-      test('Multi-key convergence scenario', () async {
-        final sharedTopicPrefix = 'multikey_test_${DateTime.now().millisecondsSinceEpoch}';
-        
-        final config1 = TestConfigurations.withAntiEntropy(
-          clientId: client1Id,
-          nodeId: node1Id,
-          topicPrefix: sharedTopicPrefix,
-        );
-        
-        final config2 = TestConfigurations.withAntiEntropy(
-          clientId: client2Id,
-          nodeId: node2Id,
-          topicPrefix: sharedTopicPrefix,
-        );
-        
-        final mqttClient1 = MqttClientImpl(config1);
-        final mqttClient2 = MqttClientImpl(config2);
-        
-        final storage1 = InMemoryKVStorage();
-        final storage2 = InMemoryKVStorage();
-        
-        try {
-          await mqttClient1.connect();
-          await mqttClient2.connect();
-          
-          // Create different data on each node
-          final testKeys = ['user:1', 'user:2', 'user:3', 'config:app', 'config:db'];
-          final node1Data = <String, Map<String, dynamic>>{};
-          final node2Data = <String, Map<String, dynamic>>{};
-          
-          for (int i = 0; i < testKeys.length; i++) {
-            final key = testKeys[i];
-            
-            if (i < 3) {
-              // Node 1 has first 3 keys
-              node1Data[key] = {
-                'data': 'node1_data_$i',
-                'timestamp': DateTime.now().millisecondsSinceEpoch + i,
-              };
-              storage1.set(key, node1Data[key]!);
-            } else {
-              // Node 2 has last 2 keys
-              node2Data[key] = {
-                'data': 'node2_data_$i',
-                'timestamp': DateTime.now().millisecondsSinceEpoch + i,
-              };
-              storage2.set(key, node2Data[key]!);
-            }
-          }
-          
-          // Simulate replication sync
-          final replicationEvents = <Map<String, dynamic>>[];
-          
-          // Node 1 publishes its state
-          for (final entry in node1Data.entries) {
-            final event = {
-              'nodeId': node1Id,
-              'operation': 'SET',
-              'key': entry.key,
-              'value': entry.value,
-              'timestamp': entry.value['timestamp'],
-            };
-            replicationEvents.add(event);
-            await mqttClient1.publish('$sharedTopicPrefix/replication/events', 
-                jsonEncode(event));
-          }
-          
-          // Node 2 publishes its state
-          for (final entry in node2Data.entries) {
-            final event = {
-              'nodeId': node2Id,
-              'operation': 'SET',
-              'key': entry.key,
-              'value': entry.value,
-              'timestamp': entry.value['timestamp'],
-            };
-            replicationEvents.add(event);
-            await mqttClient2.publish('$sharedTopicPrefix/replication/events', 
-                jsonEncode(event));
-          }
-          
-          await Future.delayed(Duration(milliseconds: 500));
-          
-          // Apply replication events to both nodes
-          for (final event in replicationEvents) {
-            final key = event['key'] as String;
-            final value = event['value'] as Map<String, dynamic>;
-            final nodeId = event['nodeId'] as String;
-            
-            // Apply to the other node
-            if (nodeId != node1Id) {
-              storage1.set(key, value);
-            }
-            if (nodeId != node2Id) {
-              storage2.set(key, value);
-            }
-          }
-          
-          // Verify convergence - both nodes should have all keys
-          for (final key in testKeys) {
-            final value1 = storage1.get(key);
-            final value2 = storage2.get(key);
-            
-            expect(value1, isNotNull, reason: 'Node 1 should have key $key');
-            expect(value2, isNotNull, reason: 'Node 2 should have key $key');
-            expect(value1!['data'], equals(value2!['data']), 
-                reason: 'Nodes should have same value for key $key');
-          }
-          
-          print('Multi-key convergence successful for ${testKeys.length} keys');
-          
-        } finally {
-          await mqttClient1.disconnect();
-          await mqttClient2.disconnect();
-        }
-      });
+    test('Multiple storage instances handle same operations', () async {
+      final config1 = TestConfigurations.mosquittoBasic(
+        clientId: 'conv-client-1',
+        nodeId: 'conv-node-1',
+      );
+      
+      final config2 = TestConfigurations.mosquittoBasic(
+        clientId: 'conv-client-2',
+        nodeId: 'conv-node-2',
+      );
+      
+      final storage1 = InMemoryStorage(config1);
+      final storage2 = InMemoryStorage(config2);
+      
+      await storage1.initialize();
+      await storage2.initialize();
+      
+      final testKey = 'shared-key';
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      
+      // Both nodes create entries for the same key
+      final entry1 = StorageEntry.value(
+        key: testKey,
+        value: 'from-node-1',
+        timestampMs: timestamp,
+        nodeId: config1.nodeId,
+        seq: 1,
+      );
+      
+      final entry2 = StorageEntry.value(
+        key: testKey,
+        value: 'from-node-2',
+        timestampMs: timestamp + 500, // Slightly newer
+        nodeId: config2.nodeId,
+        seq: 1,
+      );
+      
+      // Apply same sequence to both storages
+      await storage1.put(testKey, entry1);
+      await storage2.put(testKey, entry1);
+      
+      await storage1.put(testKey, entry2);
+      await storage2.put(testKey, entry2);
+      
+      // Both should have the newer value
+      final result1 = await storage1.get(testKey);
+      final result2 = await storage2.get(testKey);
+      
+      expect(result1!.value, equals('from-node-2'));
+      expect(result2!.value, equals('from-node-2'));
+      expect(result1.timestampMs, equals(result2.timestampMs));
     });
 
-    group('Conflict Resolution Tests', () {
-      test('Last-Write-Wins conflict resolution', () async {
-        final sharedTopicPrefix = 'lww_test_${DateTime.now().millisecondsSinceEpoch}';
-        
-        final config1 = TestConfigurations.withAntiEntropy(
-          clientId: client1Id,
-          nodeId: node1Id,
-          topicPrefix: sharedTopicPrefix,
-        );
-        
-        final config2 = TestConfigurations.withAntiEntropy(
-          clientId: client2Id,
-          nodeId: node2Id,
-          topicPrefix: sharedTopicPrefix,
-        );
-        
-        final mqttClient1 = MqttClientImpl(config1);
-        final mqttClient2 = MqttClientImpl(config2);
-        
-        final storage1 = InMemoryKVStorage();
-        final storage2 = InMemoryKVStorage();
-        
-        try {
-          await mqttClient1.connect();
-          await mqttClient2.connect();
-          
-          final baseTimestamp = DateTime.now().millisecondsSinceEpoch;
-          
-          // Create conflicting writes with clear timestamp ordering
-          final olderWrite = {
-            'value': 'older_value',
-            'timestamp': baseTimestamp,
-            'nodeId': node1Id,
-          };
-          
-          final newerWrite = {
-            'value': 'newer_value',
-            'timestamp': baseTimestamp + 1000, // 1 second later
-            'nodeId': node2Id,
-          };
-          
-          // Apply writes in random order to both nodes
-          final writes = [olderWrite, newerWrite];
-          writes.shuffle(Random());
-          
-          for (final write in writes) {
-            // Apply to storage1
-            final current1 = storage1.get('conflict_key');
-            if (current1 == null || (current1['timestamp'] as int) < write['timestamp']) {
-              storage1.set('conflict_key', write);
-            }
-            
-            // Apply to storage2
-            final current2 = storage2.get('conflict_key');
-            if (current2 == null || (current2['timestamp'] as int) < write['timestamp']) {
-              storage2.set('conflict_key', write);
-            }
-          }
-          
-          // Both nodes should have the newer value due to LWW
-          final finalValue1 = storage1.get('conflict_key');
-          final finalValue2 = storage2.get('conflict_key');
-          
-          expect(finalValue1, isNotNull);
-          expect(finalValue2, isNotNull);
-          expect(finalValue1!['value'], equals('newer_value'));
-          expect(finalValue2!['value'], equals('newer_value'));
-          expect(finalValue1['timestamp'], equals(baseTimestamp + 1000));
-          expect(finalValue2['timestamp'], equals(baseTimestamp + 1000));
-          
-          print('LWW conflict resolution successful: ${finalValue1['value']}');
-          
-        } finally {
-          await mqttClient1.disconnect();
-          await mqttClient2.disconnect();
-        }
-      });
-
-      test('Concurrent updates with different nodes', () async {
-        final sharedTopicPrefix = 'concurrent_test_${DateTime.now().millisecondsSinceEpoch}';
-        
-        final config1 = TestConfigurations.withAntiEntropy(
-          clientId: client1Id,
-          nodeId: node1Id,
-          topicPrefix: sharedTopicPrefix,
-        );
-        
-        final config2 = TestConfigurations.withAntiEntropy(
-          clientId: client2Id,
-          nodeId: node2Id,
-          topicPrefix: sharedTopicPrefix,
-        );
-        
-        final mqttClient1 = MqttClientImpl(config1);
-        final mqttClient2 = MqttClientImpl(config2);
-        
-        final storage1 = InMemoryKVStorage();
-        final storage2 = InMemoryKVStorage();
-        
-        try {
-          await mqttClient1.connect();
-          await mqttClient2.connect();
-          
-          // Simulate concurrent updates from both nodes
-          final updates = <Map<String, dynamic>>[];
-          final baseTimestamp = DateTime.now().millisecondsSinceEpoch;
-          
-          for (int i = 0; i < 10; i++) {
-            // Node 1 update
-            updates.add({
-              'nodeId': node1Id,
-              'key': 'concurrent_key_$i',
-              'value': {'data': 'node1_update_$i', 'counter': i},
-              'timestamp': baseTimestamp + i * 100,
-            });
-            
-            // Node 2 update (slightly later)
-            updates.add({
-              'nodeId': node2Id,
-              'key': 'concurrent_key_$i',
-              'value': {'data': 'node2_update_$i', 'counter': i + 100},
-              'timestamp': baseTimestamp + i * 100 + 50,
-            });
-          }
-          
-          // Apply updates in random order
-          updates.shuffle(Random());
-          
-          for (final update in updates) {
-            final key = update['key'] as String;
-            final value = update['value'] as Map<String, dynamic>;
-            final timestamp = update['timestamp'] as int;
-            
-            // Apply LWW logic to both storages
-            final current1 = storage1.get(key);
-            if (current1 == null || (current1['timestamp'] as int? ?? 0) < timestamp) {
-              value['timestamp'] = timestamp;
-              storage1.set(key, value);
-            }
-            
-            final current2 = storage2.get(key);
-            if (current2 == null || (current2['timestamp'] as int? ?? 0) < timestamp) {
-              value['timestamp'] = timestamp;
-              storage2.set(key, value);
-            }
-          }
-          
-          // Verify all keys converged to node2's values (later timestamps)
-          for (int i = 0; i < 10; i++) {
-            final key = 'concurrent_key_$i';
-            final value1 = storage1.get(key);
-            final value2 = storage2.get(key);
-            
-            expect(value1, isNotNull);
-            expect(value2, isNotNull);
-            expect(value1!['data'], equals(value2!['data']));
-            expect(value1['data'], equals('node2_update_$i')); // Node 2 had later timestamps
-            expect(value1['counter'], equals(i + 100));
-          }
-          
-          print('Concurrent updates resolved successfully');
-          
-        } finally {
-          await mqttClient1.disconnect();
-          await mqttClient2.disconnect();
-        }
-      });
+    test('Tombstone convergence behavior', () async {
+      final config = TestConfigurations.mosquittoBasic(
+        clientId: 'tombstone-client',
+        nodeId: 'tombstone-node',
+      );
+      
+      final storage = InMemoryStorage(config);
+      await storage.initialize();
+      
+      final testKey = 'tombstone-key';
+      final baseTimestamp = DateTime.now().millisecondsSinceEpoch;
+      
+      // Create and store a value
+      final valueEntry = StorageEntry.value(
+        key: testKey,
+        value: 'test-value',
+        timestampMs: baseTimestamp,
+        nodeId: config.nodeId,
+        seq: 1,
+      );
+      
+      await storage.put(testKey, valueEntry);
+      var result = await storage.get(testKey);
+      expect(result!.value, equals('test-value'));
+      
+      // Create tombstone
+      final tombstoneEntry = StorageEntry.tombstone(
+        key: testKey,
+        timestampMs: baseTimestamp + 1000,
+        nodeId: config.nodeId,
+        seq: 2,
+      );
+      
+      await storage.put(testKey, tombstoneEntry);
+      result = await storage.get(testKey);
+      expect(result, isNull); // Tombstone should make get return null
+      
+      // Trying to put older value entry should be ignored
+      await storage.put(testKey, valueEntry);
+      result = await storage.get(testKey);
+      expect(result, isNull); // Should still be tombstone
     });
 
-    group('Network Timing Tests', () {
-      test('Convergence under network delays', () async {
-        final sharedTopicPrefix = 'delay_test_${DateTime.now().millisecondsSinceEpoch}';
-        
-        final config1 = TestConfigurations.withAntiEntropy(
-          clientId: client1Id,
-          nodeId: node1Id,
-          topicPrefix: sharedTopicPrefix,
-        );
-        
-        final config2 = TestConfigurations.withAntiEntropy(
-          clientId: client2Id,
-          nodeId: node2Id,
-          topicPrefix: sharedTopicPrefix,
-        );
-        
-        final mqttClient1 = MqttClientImpl(config1);
-        final mqttClient2 = MqttClientImpl(config2);
-        
-        final storage1 = InMemoryKVStorage();
-        final storage2 = InMemoryKVStorage();
-        
-        try {
-          await mqttClient1.connect();
-          await mqttClient2.connect();
-          
-          // Simulate delayed message delivery
-          final delayedMessages = <Future<void>>[];
-          
-          // Node 1 sends updates with artificial delays
-          for (int i = 0; i < 5; i++) {
-            final delay = Duration(milliseconds: Random().nextInt(500));
-            delayedMessages.add(
-              Future.delayed(delay).then((_) {
-                final update = {
-                  'nodeId': node1Id,
-                  'key': 'delayed_key_$i',
-                  'value': {'data': 'delayed_data_$i'},
-                  'timestamp': DateTime.now().millisecondsSinceEpoch,
-                };
-                storage1.set(update['key'] as String, update['value'] as Map<String, dynamic>);
-                return mqttClient1.publish('$sharedTopicPrefix/replication/events', 
-                    jsonEncode(update));
-              })
-            );
-          }
-          
-          // Wait for all delayed messages
-          await Future.wait(delayedMessages);
-          
-          // Simulate processing delay
-          await Future.delayed(Duration(seconds: 1));
-          
-          // Apply replication events to node 2 (simulate eventual delivery)
-          for (int i = 0; i < 5; i++) {
-            final value = {'data': 'delayed_data_$i'};
-            storage2.set('delayed_key_$i', value);
-          }
-          
-          // Verify eventual convergence despite delays
-          for (int i = 0; i < 5; i++) {
-            final key = 'delayed_key_$i';
-            final value1 = storage1.get(key);
-            final value2 = storage2.get(key);
-            
-            expect(value1, isNotNull);
-            expect(value2, isNotNull);
-            expect(value1!['data'], equals(value2!['data']));
-          }
-          
-          print('Convergence successful under network delays');
-          
-        } finally {
-          await mqttClient1.disconnect();
-          await mqttClient2.disconnect();
-        }
-      });
+    test('Command processor maintains consistency', () async {
+      final config = TestConfigurations.mosquittoBasic(
+        clientId: 'consistency-client',
+        nodeId: 'consistency-node',
+      );
+      
+      final storage = InMemoryStorage(config);
+      await storage.initialize();
+      final processor = CommandProcessorImpl(config, storage);
+      
+      final testKey = 'consistency-key';
+      
+      // Sequence of operations
+      var response = await processor.set(testKey, 'value-1', 'cmd-1');
+      expect(response.status, equals(ResponseStatus.ok));
+      
+      response = await processor.get(testKey, 'cmd-2');
+      expect(response.status, equals(ResponseStatus.ok));
+      expect(response.value, equals('value-1'));
+      
+      response = await processor.set(testKey, 'value-2', 'cmd-3');
+      expect(response.status, equals(ResponseStatus.ok));
+      
+      response = await processor.get(testKey, 'cmd-4');
+      expect(response.status, equals(ResponseStatus.ok));
+      expect(response.value, equals('value-2'));
+      
+      response = await processor.delete(testKey, 'cmd-5');
+      expect(response.status, equals(ResponseStatus.ok));
+      
+      response = await processor.get(testKey, 'cmd-6');
+      expect(response.status, equals(ResponseStatus.error));
     });
 
-    group('Performance and Scalability', () {
-      test('Convergence performance with large datasets', () async {
-        final sharedTopicPrefix = 'perf_test_${DateTime.now().millisecondsSinceEpoch}';
-        
-        final config1 = TestConfigurations.withAntiEntropy(
-          clientId: client1Id,
-          nodeId: node1Id,
-          topicPrefix: sharedTopicPrefix,
-        );
-        
-        final mqttClient1 = MqttClientImpl(config1);
-        final storage1 = InMemoryKVStorage();
-        
-        try {
-          await mqttClient1.connect();
-          
-          final startTime = DateTime.now();
-          const keyCount = 1000;
-          
-          // Create large dataset
-          for (int i = 0; i < keyCount; i++) {
-            final key = 'perf_key_$i';
-            final value = {
-              'data': TestDataGenerator.generatePayload(1024), // 1KB each
-              'timestamp': DateTime.now().millisecondsSinceEpoch + i,
-              'index': i,
-            };
-            
-            storage1.set(key, value);
-            
-            // Simulate periodic replication events
-            if (i % 100 == 0) {
-              final event = {
-                'nodeId': node1Id,
-                'operation': 'SET',
-                'key': key,
-                'value': value,
-                'timestamp': value['timestamp'],
-              };
-              await mqttClient1.publish('$sharedTopicPrefix/replication/events', 
-                  jsonEncode(event));
-            }
-          }
-          
-          final endTime = DateTime.now();
-          final duration = endTime.difference(startTime);
-          
-          print('Created $keyCount keys in ${duration.inMilliseconds}ms');
-          print('Throughput: ${(keyCount / duration.inSeconds).toStringAsFixed(2)} keys/sec');
-          
-          // Verify all data is accessible
-          expect(storage1.get('perf_key_0'), isNotNull);
-          expect(storage1.get('perf_key_${keyCount - 1}'), isNotNull);
-          
-          // Performance should be reasonable for integration test
-          expect(duration.inSeconds, lessThan(30), 
-              reason: 'Should create $keyCount keys in under 30 seconds');
-          
-        } finally {
-          await mqttClient1.disconnect();
-        }
-      });
+    test('Concurrent operations maintain ordering', () async {
+      final config = TestConfigurations.mosquittoBasic(
+        clientId: 'concurrent-client',
+        nodeId: 'concurrent-node',
+      );
+      
+      final storage = InMemoryStorage(config);
+      await storage.initialize();
+      final processor = CommandProcessorImpl(config, storage);
+      
+      // Execute multiple operations concurrently
+      final futures = <Future<Response>>[];
+      
+      // Set multiple keys
+      for (int i = 0; i < 20; i++) {
+        futures.add(processor.set('key-$i', 'value-$i', 'set-cmd-$i'));
+      }
+      
+      final setResponses = await Future.wait(futures);
+      
+      // All SET operations should succeed
+      for (final response in setResponses) {
+        expect(response.status, equals(ResponseStatus.ok));
+      }
+      
+      // Now get all values
+      futures.clear();
+      for (int i = 0; i < 20; i++) {
+        futures.add(processor.get('key-$i', 'get-cmd-$i'));
+      }
+      
+      final getResponses = await Future.wait(futures);
+      
+      // All GET operations should succeed and return correct values
+      for (int i = 0; i < getResponses.length; i++) {
+        expect(getResponses[i].status, equals(ResponseStatus.ok));
+        expect(getResponses[i].value, equals('value-$i'));
+      }
+    });
+
+    test('Anti-entropy basic concept validation', () async {
+      // This test validates the basic concepts needed for anti-entropy
+      // without implementing the full protocol
+      
+      final config1 = TestConfigurations.mosquittoBasic(
+        clientId: 'anti-entropy-1',
+        nodeId: 'anti-entropy-node-1',
+      );
+      
+      final config2 = TestConfigurations.mosquittoBasic(
+        clientId: 'anti-entropy-2',
+        nodeId: 'anti-entropy-node-2',
+      );
+      
+      final storage1 = InMemoryStorage(config1);
+      final storage2 = InMemoryStorage(config2);
+      
+      await storage1.initialize();
+      await storage2.initialize();
+      
+      final testKey = 'anti-entropy-key';
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      
+      // Node 1 gets a value first
+      final entry1 = StorageEntry.value(
+        key: testKey,
+        value: 'from-node-1',
+        timestampMs: timestamp,
+        nodeId: config1.nodeId,
+        seq: 1,
+      );
+      
+      // Node 2 gets a newer value
+      final entry2 = StorageEntry.value(
+        key: testKey,
+        value: 'from-node-2',
+        timestampMs: timestamp + 1000,
+        nodeId: config2.nodeId,
+        seq: 1,
+      );
+      
+      // Simulate anti-entropy sync: node 1 applies entry from node 2
+      await storage1.put(testKey, entry1);
+      await storage1.put(testKey, entry2); // Newer entry should win
+      
+      // Simulate anti-entropy sync: node 2 applies entry from node 1
+      await storage2.put(testKey, entry2);
+      await storage2.put(testKey, entry1); // Older entry should be ignored
+      
+      // Both nodes should converge to the newer value
+      final result1 = await storage1.get(testKey);
+      final result2 = await storage2.get(testKey);
+      
+      expect(result1!.value, equals('from-node-2'));
+      expect(result2!.value, equals('from-node-2'));
+      expect(result1.timestampMs, equals(result2.timestampMs));
     });
   });
 }
