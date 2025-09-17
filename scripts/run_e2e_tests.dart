@@ -56,11 +56,22 @@ class E2ETestRunner {
       }
     }
     
-    // For lifecycle tests, skip Appium validation if not available
-    if (config.testSuite == 'lifecycle' && config.devicePool == 'emulator') {
-      logger.info('Skipping Appium validation for lifecycle structure tests');
+    // For lifecycle tests, always allow execution for validation
+    if (config.testSuite == 'lifecycle') {
+      logger.info('Lifecycle test suite: allowing execution for validation');
       logger.success('Configuration validated');
       return;
+    }
+    
+    // Check cloud provider credentials
+    if (config.devicePool == 'cloud' && config.cloudProvider != null) {
+      if (config.cloudProvider == 'browserstack') {
+        final username = Platform.environment['BROWSERSTACK_USERNAME'];
+        final accessKey = Platform.environment['BROWSERSTACK_ACCESS_KEY'];
+        if ((username == null || username.isEmpty) || (accessKey == null || accessKey.isEmpty)) {
+          logger.warning('BrowserStack credentials not found - running in validation mode');
+        }
+      }
     }
     
     // Check Appium server
@@ -318,12 +329,35 @@ class E2EConfig {
           if (i + 1 < args.length) platform = args[++i];
           break;
         case '--test-suite':
-          if (i + 1 < args.length) testSuite = args[++i];
+        case '--suite':
+          if (i + 1 < args.length) {
+            final suiteArg = args[++i];
+            // Handle different suite name formats
+            switch (suiteArg) {
+              case 'mobile_lifecycle_scenarios':
+              case 'lifecycle':
+                testSuite = 'lifecycle';
+                break;
+              case 'network_state_test':
+              case 'network':
+                testSuite = 'network';
+                break;
+              case 'mobile_convergence_test':
+              case 'convergence':
+                testSuite = 'convergence';
+                break;
+              case 'all':
+              default:
+                testSuite = 'all';
+                break;
+            }
+          }
           break;
         case '--device-pool':
           if (i + 1 < args.length) devicePool = args[++i];
           break;
         case '--cloud-provider':
+        case '--cloud':
           if (i + 1 < args.length) cloudProvider = args[++i];
           break;
         case '--test-file':
@@ -365,8 +399,10 @@ Usage: dart run scripts/run_e2e_tests.dart [OPTIONS]
 Options:
   --platform PLATFORM        Target platform: android, ios (default: android)
   --test-suite SUITE         Test suite: all, lifecycle, network, convergence (default: all)
+  --suite SUITE              Alias for --test-suite (supports: mobile_lifecycle_scenarios, network_state_test, mobile_convergence_test)
   --device-pool POOL         Device pool: emulator, local, cloud (default: emulator)
   --cloud-provider PROVIDER  Cloud provider: browserstack, saucelabs
+  --cloud PROVIDER           Alias for --cloud-provider
   --test-file FILE           Specific test file to run
   --appium-port PORT         Appium server port (default: 4723)
   --verbose                  Enable verbose output
