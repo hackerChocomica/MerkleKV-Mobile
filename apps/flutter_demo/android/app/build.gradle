@@ -29,31 +29,17 @@ android {
     }
 
     signingConfigs {
-        beta {
-            keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "merklekv_beta"
+        release {
+            keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "merklekv_release"
             keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: "android"
-            storeFile file("beta-release.keystore")
+            storeFile file("release.keystore")
             storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "android"
-        }
-    }
-
-    flavorDimensions "env"
-    productFlavors {
-        beta {
-            dimension "env"
-            applicationIdSuffix ".beta"
-            versionNameSuffix "-beta"
-            resValue "string", "app_name", "MerkleKV (Beta)"
-        }
-        production {
-            dimension "env"
-            resValue "string", "app_name", "MerkleKV Mobile"
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.beta
+            signingConfig = signingConfigs.release
             minifyEnabled = false
             shrinkResources = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
