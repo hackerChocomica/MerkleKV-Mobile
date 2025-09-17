@@ -424,8 +424,6 @@ jobs:
             flutter doctor
             echo "Enabling Android platform support..."
             flutter config --enable-android
-            echo "Regenerating platform files if needed..."
-            flutter create . --platforms=android
             echo "Cleaning and getting dependencies..."
             flutter clean
             flutter pub get
