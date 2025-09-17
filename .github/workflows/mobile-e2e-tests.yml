@@ -435,6 +435,9 @@ jobs:
             cd apps/flutter_demo
             flutter clean
             flutter pub get
+            # Verify integration_test dependency is properly resolved
+            echo "Verifying integration_test dependency resolution..."
+            flutter pub deps | grep integration_test || echo "WARNING: integration_test not found in dependency tree"
             cd ../..
             echo "Checking available devices..."
             flutter devices
@@ -442,6 +445,15 @@ jobs:
             ./scripts/build-flutter.sh
             echo "Running integration tests on Android device..."
             cd apps/flutter_demo
+            # Ensure integration_test dependency is available before running tests
+            if ! grep -q "integration_test:" pubspec.yaml; then
+              echo "Adding missing integration_test dependency..."
+              sed -i '/dev_dependencies:/a\  integration_test:\n    sdk: flutter' pubspec.yaml
+              flutter pub get
+            fi
+            # Double-check dependency resolution
+            echo "Final dependency verification..."
+            flutter pub deps | grep integration_test && echo "✅ integration_test dependency confirmed" || echo "❌ integration_test dependency missing"
             flutter test integration_test/ --dart-define=CI=true
 
       - name: Run Flutter integration tests (iOS - dry run)
