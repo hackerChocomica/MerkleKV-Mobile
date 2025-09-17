@@ -13,7 +13,7 @@ void main() {
         clientId: 'test-client',
         nodeId: 'test-node',
       );
-      
+
       expect(config.mqttHost, equals('localhost'));
       expect(config.mqttPort, equals(1883));
     }, tags: ['integration']);

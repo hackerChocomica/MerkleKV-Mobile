@@ -420,7 +420,21 @@ jobs:
           profile: Nexus 6
           script: |
             cd apps/flutter_demo
-            flutter test integration_test/merkle_kv_integration_test.dart
+            echo "Checking Flutter doctor..."
+            flutter doctor
+            echo "Enabling Android platform support..."
+            flutter config --enable-android
+            echo "Regenerating platform files if needed..."
+            flutter create . --platforms=android
+            echo "Cleaning and getting dependencies..."
+            flutter clean
+            flutter pub get
+            echo "Checking available devices..."
+            flutter devices
+            echo "Building app for Android to verify compatibility..."
+            flutter build apk --debug
+            echo "Running integration tests..."
+            flutter test integration_test/ --dart-define=CI=true
 
       - name: Run Flutter integration tests (iOS - dry run)
         if: matrix.platform == 'ios'

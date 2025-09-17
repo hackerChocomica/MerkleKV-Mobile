@@ -118,9 +118,11 @@ class MqttClientImpl implements MqttClientInterface {
       Timer? timeoutTimer;
 
       // Set up timeout from configuration
-      timeoutTimer = Timer(Duration(seconds: _config.connectionTimeoutSeconds), () {
+      timeoutTimer =
+          Timer(Duration(seconds: _config.connectionTimeoutSeconds), () {
         if (!connectionCompleter.isCompleted) {
-          connectionCompleter.completeError(Exception('Connection timeout after ${_config.connectionTimeoutSeconds} seconds'));
+          connectionCompleter.completeError(Exception(
+              'Connection timeout after ${_config.connectionTimeoutSeconds} seconds'));
         }
       });
 
