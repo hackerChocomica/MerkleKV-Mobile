@@ -10,6 +10,8 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    compileSdk = 34
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -20,22 +22,54 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.flutter_demo"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 21  // Explicitly set to support API 21+ (including our emulator API 29)
-        targetSdk = flutter.targetSdkVersion
-        versionCode = 1
-        versionName = "1.0.0"
+        applicationId = "com.merklekv.mobile"
+        minSdk = 21  // Support API 21+ for wide compatibility
+        targetSdk = 34
+        versionCode = 10001
+        versionName = "1.0.0-beta.1"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        beta {
+            keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "merklekv_beta"
+            keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: "android"
+            storeFile file("beta-release.keystore")
+            storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "android"
+        }
+    }
+
+    flavorDimensions "env"
+    productFlavors {
+        beta {
+            dimension "env"
+            applicationIdSuffix ".beta"
+            versionNameSuffix "-beta"
+            resValue "string", "app_name", "MerkleKV (Beta)"
+        }
+        production {
+            dimension "env"
+            resValue "string", "app_name", "MerkleKV Mobile"
+        }
+    }
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            signingConfig = signingConfigs.beta
+            minifyEnabled = false
+            shrinkResources = false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        debug {
+            applicationIdSuffix ".debug"
+            debuggable = true
+        }
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 }
 
