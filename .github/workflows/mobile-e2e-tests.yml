@@ -427,7 +427,7 @@ jobs:
             # Backup pubspec.yaml before flutter create (which may overwrite it)
             cp pubspec.yaml pubspec.yaml.backup
             # Only recreate Android platform if needed, avoiding project name conflicts
-            [ ! -f "android/app/src/main/kotlin/com/merklekv/flutter_demo/MainActivity.kt" ] && flutter create --platforms=android --project-name=flutter_demo . || echo "Platform files already exist"
+            [ ! -f "android/app/src/main/kotlin/com/merklekv/flutter_demo/MainActivity.kt" ] && flutter create --platforms=android --project-name=flutter_demo --org=com.merklekv . || echo "Platform files already exist"
             # Restore pubspec.yaml to ensure all dependencies are preserved
             mv pubspec.yaml.backup pubspec.yaml
             cd ../..
