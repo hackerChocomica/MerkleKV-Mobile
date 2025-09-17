@@ -444,8 +444,8 @@ jobs:
             echo "Building app for Android using reliable build script..."
             ./scripts/build-flutter.sh
             echo "Running integration tests on Android device..."
-            cd apps/flutter_demo
-            # Ensure we're in the correct directory
+            cd apps/flutter_demo && pwd
+            # Ensure we're in the correct directory and verify file exists
             echo "Current working directory: $(pwd)"
             echo "Verifying integration test file exists:"
             ls -la integration_test/merkle_kv_integration_test.dart
@@ -462,7 +462,7 @@ jobs:
             # Run integration tests on Android device with explicit path
             echo "Starting integration tests on Android emulator..."
             echo "Testing from directory: $(pwd)"
-            flutter test ./integration_test/merkle_kv_integration_test.dart --device-id emulator-5554 --dart-define=CI=true
+            flutter test integration_test/merkle_kv_integration_test.dart --device-id emulator-5554 --dart-define=CI=true
 
       - name: Run Flutter integration tests (iOS - dry run)
         if: matrix.platform == 'ios'
