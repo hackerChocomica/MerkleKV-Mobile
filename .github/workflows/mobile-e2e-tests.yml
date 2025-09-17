@@ -455,7 +455,9 @@ jobs:
             # Verify dependency resolution
             echo "Final dependency verification..."
             flutter pub deps | grep integration_test && echo "✅ integration_test dependency confirmed" || echo "❌ integration_test dependency missing"
-            flutter test integration_test/ --dart-define=CI=true
+            # Run integration tests on Android device
+            echo "Starting integration tests on Android emulator..."
+            flutter test integration_test/ --device-id emulator-5554 --dart-define=CI=true
 
       - name: Run Flutter integration tests (iOS - dry run)
         if: matrix.platform == 'ios'
