@@ -197,9 +197,8 @@ jobs:
 
       - name: Build Flutter app for testing
         run: |
-          cd apps/flutter_demo
-          flutter build apk --debug
-          cd ../../
+          echo "Building Flutter APK using reliable build script..."
+          ./scripts/build-flutter.sh
 
       - name: Run Android E2E tests (cloud)
         if: env.DEVICE_POOL == 'cloud'
@@ -419,19 +418,21 @@ jobs:
           arch: x86_64
           profile: Nexus 6
           script: |
-            cd apps/flutter_demo
             echo "Checking Flutter doctor..."
             flutter doctor
             echo "Enabling Android platform support..."
             flutter config --enable-android
             echo "Cleaning and getting dependencies..."
+            cd apps/flutter_demo
             flutter clean
             flutter pub get
+            cd ../..
             echo "Checking available devices..."
             flutter devices
-            echo "Building app for Android to verify compatibility..."
-            flutter build apk --debug
+            echo "Building app for Android using reliable build script..."
+            ./scripts/build-flutter.sh
             echo "Running integration tests..."
+            cd apps/flutter_demo
             flutter test integration_test/ --dart-define=CI=true
 
       - name: Run Flutter integration tests (iOS - dry run)
