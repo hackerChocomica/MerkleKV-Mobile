@@ -181,10 +181,23 @@ class E2ETestRunner {
     final startTime = DateTime.now();
     
     try {
+      // Determine working directory and adjust test file path
+      final currentDir = Directory.current.path;
+      final rootDir = '/root/MerkleKV-Mobile';
+      String workingDir = rootDir;
+      String adjustedTestFile = testFile;
+      
+      // If we're running from a subdirectory, adjust the paths
+      if (!currentDir.endsWith('MerkleKV-Mobile')) {
+        // We're in a subdirectory like test/e2e
+        adjustedTestFile = testFile.startsWith('../') ? testFile : '../../$testFile';
+        workingDir = currentDir;
+      }
+      
       // Create test execution command - run the test file directly
       final args = [
         'run',
-        testFile,
+        adjustedTestFile,
         '--platform', config.platform,
         '--device-pool', config.devicePool,
         '--appium-port', config.appiumPort.toString(),
@@ -200,7 +213,7 @@ class E2ETestRunner {
       
       // Execute test
       final process = await Process.start('dart', args,
-          workingDirectory: '/root/MerkleKV-Mobile');
+          workingDirectory: workingDir);
       
       // Capture output
       final stdout = StringBuffer();
