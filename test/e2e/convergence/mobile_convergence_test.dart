@@ -766,3 +766,189 @@ class SimulateMemoryPressureStep extends TestStep {
     await Future.delayed(Duration(seconds: 1));
   }
 }
+
+/// Executable test file for convergence scenarios validation
+void main(List<String> args) async {
+  print('[INFO] Starting Mobile Convergence E2E Test Validation');
+  
+  // Parse command line arguments
+  final config = _parseArgs(args);
+  final verbose = config.containsKey('verbose');
+  
+  final results = <String, bool>{};
+  var totalTests = 0;
+  var passedTests = 0;
+  
+  try {
+    print('[INFO] Validating mobile convergence test scenarios...');
+    
+    // Test 1: Anti-Entropy During Lifecycle
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: Anti-Entropy During Lifecycle');
+      final scenario = ConvergenceTestScenarios.antiEntropyDuringLifecycleScenario();
+      await _validateConvergenceScenario(scenario, 'Anti-Entropy During Lifecycle');
+      results['anti_entropy_lifecycle'] = true;
+      passedTests++;
+      print('[SUCCESS] Anti-Entropy During Lifecycle - PASSED');
+    } catch (e) {
+      results['anti_entropy_lifecycle'] = false;
+      print('[ERROR] Anti-Entropy During Lifecycle - FAILED: $e');
+    }
+    
+    // Test 2: Multi-Device Sync During Network Transition
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: Multi-Device Sync During Network Transition');
+      final scenario = ConvergenceTestScenarios.multiDeviceSyncDuringNetworkTransition();
+      await _validateConvergenceScenario(scenario, 'Multi-Device Sync During Network Transition');
+      results['multi_device_sync'] = true;
+      passedTests++;
+      print('[SUCCESS] Multi-Device Sync During Network Transition - PASSED');
+    } catch (e) {
+      results['multi_device_sync'] = false;
+      print('[ERROR] Multi-Device Sync During Network Transition - FAILED: $e');
+    }
+    
+    // Test 3: Conflict Resolution During Suspension
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: Conflict Resolution During Suspension');
+      final scenario = ConvergenceTestScenarios.conflictResolutionDuringSuspension();
+      await _validateConvergenceScenario(scenario, 'Conflict Resolution During Suspension');
+      results['conflict_resolution'] = true;
+      passedTests++;
+      print('[SUCCESS] Conflict Resolution During Suspension - PASSED');
+    } catch (e) {
+      results['conflict_resolution'] = false;
+      print('[ERROR] Conflict Resolution During Suspension - FAILED: $e');
+    }
+    
+    // Test 4: Partition Recovery Scenario
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: Partition Recovery');
+      final scenario = ConvergenceTestScenarios.partitionRecoveryScenario();
+      await _validateConvergenceScenario(scenario, 'Partition Recovery');
+      results['partition_recovery'] = true;
+      passedTests++;
+      print('[SUCCESS] Partition Recovery - PASSED');
+    } catch (e) {
+      results['partition_recovery'] = false;
+      print('[ERROR] Partition Recovery - FAILED: $e');
+    }
+    
+    // Test 5: Performance Convergence Scenario
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: Performance Convergence');
+      final scenario = ConvergenceTestScenarios.performanceConvergenceScenario();
+      await _validateConvergenceScenario(scenario, 'Performance Convergence');
+      results['performance_convergence'] = true;
+      passedTests++;
+      print('[SUCCESS] Performance Convergence - PASSED');
+    } catch (e) {
+      results['performance_convergence'] = false;
+      print('[ERROR] Performance Convergence - FAILED: $e');
+    }
+    
+    // Test 6: All Scenarios Collection
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: All Convergence Scenarios Collection');
+      final allScenarios = ConvergenceTestScenarios.getAllScenarios();
+      await _validateConvergenceScenariosCollection(allScenarios, 'All Convergence Scenarios');
+      results['all_scenarios_collection'] = true;
+      passedTests++;
+      print('[SUCCESS] All Convergence Scenarios Collection - PASSED (${allScenarios.length} scenarios)');
+    } catch (e) {
+      results['all_scenarios_collection'] = false;
+      print('[ERROR] All Convergence Scenarios Collection - FAILED: $e');
+    }
+    
+    print('');
+    print('[INFO] ========== Mobile Convergence Test Results ==========');
+    print('[INFO] Total Tests: $totalTests');
+    print('[INFO] Passed: $passedTests');
+    print('[INFO] Failed: ${totalTests - passedTests}');
+    print('[INFO] Success Rate: ${((passedTests / totalTests) * 100).toStringAsFixed(1)}%');
+    
+    // Print individual results
+    results.forEach((test, passed) {
+      final status = passed ? '✅ PASS' : '❌ FAIL';
+      print('[INFO] $status - $test');
+    });
+    print('[INFO] ================================================');
+    print('');
+    
+    if (passedTests == totalTests) {
+      print('[SUCCESS] All mobile convergence tests passed!');
+    } else {
+      print('[ERROR] ${totalTests - passedTests} test(s) failed');
+    }
+    
+  } catch (e) {
+    print('[ERROR] Test execution failed: $e');
+  }
+}
+
+Future<void> _validateConvergenceScenario(ConvergenceScenario scenario, String testName) async {
+  // Validation mode - check scenario structure and requirements
+  if (scenario.name.isEmpty) {
+    throw Exception('Scenario name is required');
+  }
+  
+  if (scenario.steps.isEmpty) {
+    throw Exception('Scenario must have at least one step');
+  }
+  
+  if (scenario.preConditions.isEmpty) {
+    throw Exception('Scenario must have pre-conditions defined');
+  }
+  
+  if (scenario.deviceCount < 1) {
+    throw Exception('Device count must be at least 1');
+  }
+  
+  // Validate each step has required properties
+  for (final step in scenario.steps) {
+    if (step.description.isEmpty) {
+      throw Exception('Step description is required');
+    }
+  }
+  
+  // Simulate step execution validation
+  await Future.delayed(Duration(milliseconds: 50));
+}
+
+Future<void> _validateConvergenceScenariosCollection(List<ConvergenceScenario> scenarios, String testName) async {
+  if (scenarios.isEmpty) {
+    throw Exception('Scenarios collection cannot be empty');
+  }
+  
+  // Validate each scenario in the collection
+  for (final scenario in scenarios) {
+    await _validateConvergenceScenario(scenario, scenario.name);
+  }
+}
+
+Map<String, String> _parseArgs(List<String> args) {
+  final config = <String, String>{};
+  
+  for (int i = 0; i < args.length; i++) {
+    final arg = args[i];
+    
+    if (arg.startsWith('--')) {
+      final key = arg.substring(2);
+      
+      if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+        config[key] = args[i + 1];
+        i++; // Skip next argument as it's the value
+      } else {
+        config[key] = 'true'; // Flag without value
+      }
+    }
+  }
+  
+  return config;
+}

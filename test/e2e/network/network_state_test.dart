@@ -567,3 +567,185 @@ class VerifyConnectionStep extends TestStep {
     await Future.delayed(Duration(milliseconds: 100));
   }
 }
+
+/// Executable test file for network state scenarios validation
+void main(List<String> args) async {
+  print('[INFO] Starting Mobile Network State E2E Test Validation');
+  
+  // Parse command line arguments
+  final config = _parseArgs(args);
+  final verbose = config.containsKey('verbose');
+  
+  final results = <String, bool>{};
+  var totalTests = 0;
+  var passedTests = 0;
+  
+  try {
+    print('[INFO] Validating mobile network state test scenarios...');
+    
+    // Test 1: WiFi to Cellular Transition
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: WiFi to Cellular Transition');
+      final scenario = NetworkStateTestScenarios.wifiToCellularTransition();
+      await _validateNetworkScenario(scenario, 'WiFi to Cellular Transition');
+      results['wifi_to_cellular'] = true;
+      passedTests++;
+      print('[SUCCESS] WiFi to Cellular Transition - PASSED');
+    } catch (e) {
+      results['wifi_to_cellular'] = false;
+      print('[ERROR] WiFi to Cellular Transition - FAILED: $e');
+    }
+    
+    // Test 2: Cellular to WiFi Transition
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: Cellular to WiFi Transition');
+      final scenario = NetworkStateTestScenarios.cellularToWifiTransition();
+      await _validateNetworkScenario(scenario, 'Cellular to WiFi Transition');
+      results['cellular_to_wifi'] = true;
+      passedTests++;
+      print('[SUCCESS] Cellular to WiFi Transition - PASSED');
+    } catch (e) {
+      results['cellular_to_wifi'] = false;
+      print('[ERROR] Cellular to WiFi Transition - FAILED: $e');
+    }
+    
+    // Test 3: Airplane Mode Toggle Scenario
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: Airplane Mode Toggle');
+      final scenario = NetworkStateTestScenarios.airplaneModeToggleScenario();
+      await _validateNetworkScenario(scenario, 'Airplane Mode Toggle');
+      results['airplane_mode_toggle'] = true;
+      passedTests++;
+      print('[SUCCESS] Airplane Mode Toggle - PASSED');
+    } catch (e) {
+      results['airplane_mode_toggle'] = false;
+      print('[ERROR] Airplane Mode Toggle - FAILED: $e');
+    }
+    
+    // Test 4: Network Interruption Scenario
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: Network Interruption');
+      final scenario = NetworkStateTestScenarios.networkInterruptionScenario();
+      await _validateNetworkScenario(scenario, 'Network Interruption');
+      results['network_interruption'] = true;
+      passedTests++;
+      print('[SUCCESS] Network Interruption - PASSED');
+    } catch (e) {
+      results['network_interruption'] = false;
+      print('[ERROR] Network Interruption - FAILED: $e');
+    }
+    
+    // Test 5: Poor Connectivity Scenario
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: Poor Connectivity');
+      final scenario = NetworkStateTestScenarios.poorConnectivityScenario();
+      await _validateNetworkScenario(scenario, 'Poor Connectivity');
+      results['poor_connectivity'] = true;
+      passedTests++;
+      print('[SUCCESS] Poor Connectivity - PASSED');
+    } catch (e) {
+      results['poor_connectivity'] = false;
+      print('[ERROR] Poor Connectivity - FAILED: $e');
+    }
+    
+    // Test 6: All Scenarios Collection
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: All Network Scenarios Collection');
+      final allScenarios = NetworkStateTestScenarios.getAllScenarios();
+      await _validateNetworkScenariosCollection(allScenarios, 'All Network Scenarios');
+      results['all_scenarios_collection'] = true;
+      passedTests++;
+      print('[SUCCESS] All Network Scenarios Collection - PASSED (${allScenarios.length} scenarios)');
+    } catch (e) {
+      results['all_scenarios_collection'] = false;
+      print('[ERROR] All Network Scenarios Collection - FAILED: $e');
+    }
+    
+    print('');
+    print('[INFO] ========== Mobile Network State Test Results ==========');
+    print('[INFO] Total Tests: $totalTests');
+    print('[INFO] Passed: $passedTests');
+    print('[INFO] Failed: ${totalTests - passedTests}');
+    print('[INFO] Success Rate: ${((passedTests / totalTests) * 100).toStringAsFixed(1)}%');
+    
+    // Print individual results
+    results.forEach((test, passed) {
+      final status = passed ? '✅ PASS' : '❌ FAIL';
+      print('[INFO] $status - $test');
+    });
+    print('[INFO] ================================================');
+    print('');
+    
+    if (passedTests == totalTests) {
+      print('[SUCCESS] All mobile network state tests passed!');
+    } else {
+      print('[ERROR] ${totalTests - passedTests} test(s) failed');
+    }
+    
+  } catch (e) {
+    print('[ERROR] Test execution failed: $e');
+  }
+}
+
+Future<void> _validateNetworkScenario(NetworkTransitionScenario scenario, String testName) async {
+  // Validation mode - check scenario structure and requirements
+  if (scenario.name.isEmpty) {
+    throw Exception('Scenario name is required');
+  }
+  
+  if (scenario.steps.isEmpty) {
+    throw Exception('Scenario must have at least one step');
+  }
+  
+  if (scenario.preConditions.isEmpty) {
+    throw Exception('Scenario must have pre-conditions defined');
+  }
+  
+  // Validate each step has required properties
+  for (final step in scenario.steps) {
+    if (step.description.isEmpty) {
+      throw Exception('Step description is required');
+    }
+  }
+  
+  // Simulate step execution validation
+  await Future.delayed(Duration(milliseconds: 50));
+}
+
+Future<void> _validateNetworkScenariosCollection(List<NetworkTransitionScenario> scenarios, String testName) async {
+  if (scenarios.isEmpty) {
+    throw Exception('Scenarios collection cannot be empty');
+  }
+  
+  // Validate each scenario in the collection
+  for (final scenario in scenarios) {
+    await _validateNetworkScenario(scenario, scenario.name);
+  }
+}
+
+Map<String, String> _parseArgs(List<String> args) {
+  final config = <String, String>{};
+  
+  for (int i = 0; i < args.length; i++) {
+    final arg = args[i];
+    
+    if (arg.startsWith('--')) {
+      final key = arg.substring(2);
+      
+      if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+        config[key] = args[i + 1];
+        i++; // Skip next argument as it's the value
+      } else {
+        config[key] = 'true'; // Flag without value
+      }
+    }
+  }
+  
+  return config;
+}

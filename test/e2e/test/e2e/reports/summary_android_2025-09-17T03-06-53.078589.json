@@ -1,0 +1,20 @@
+{
+  "platform": "android",
+  "testSuite": "network",
+  "devicePool": "cloud",
+  "timestamp": "2025-09-17T03:06:53.079674",
+  "totalTests": 1,
+  "passedTests": 0,
+  "failedTests": 1,
+  "totalDuration": 639,
+  "results": [
+    {
+      "testName": "network_state_test",
+      "passed": false,
+      "duration": 639,
+      "stdout": "",
+      "stderr": "Invoked Dart programs must have a 'main' function defined:\nhttps://dart.dev/to/main-function\n",
+      "exitCode": 253
+    }
+  ]
+}

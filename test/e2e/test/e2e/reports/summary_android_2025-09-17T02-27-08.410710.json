@@ -1,0 +1,20 @@
+{
+  "platform": "android",
+  "testSuite": "lifecycle",
+  "devicePool": "emulator",
+  "timestamp": "2025-09-17T02:27:08.412173",
+  "totalTests": 1,
+  "passedTests": 0,
+  "failedTests": 1,
+  "totalDuration": 455,
+  "results": [
+    {
+      "testName": "mobile_lifecycle_test",
+      "passed": false,
+      "duration": 455,
+      "stdout": "",
+      "stderr": "Could not find file `test/e2e/tests/mobile_lifecycle_test.dart`\n",
+      "exitCode": 255
+    }
+  ]
+}

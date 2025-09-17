@@ -1,0 +1,20 @@
+{
+  "platform": "android",
+  "testSuite": "convergence",
+  "devicePool": "cloud",
+  "timestamp": "2025-09-17T03:09:23.716945",
+  "totalTests": 1,
+  "passedTests": 1,
+  "failedTests": 0,
+  "totalDuration": 1120,
+  "results": [
+    {
+      "testName": "mobile_convergence_test",
+      "passed": true,
+      "duration": 1120,
+      "stdout": "[INFO] Starting Mobile Convergence E2E Test Validation\n[INFO] Validating mobile convergence test scenarios...\n[INFO] Validating: Anti-Entropy During Lifecycle\n[SUCCESS] Anti-Entropy During Lifecycle - PASSED\n[INFO] Validating: Multi-Device Sync During Network Transition\n[SUCCESS] Multi-Device Sync During Network Transition - PASSED\n[INFO] Validating: Conflict Resolution During Suspension\n[SUCCESS] Conflict Resolution During Suspension - PASSED\n[INFO] Validating: Partition Recovery\n[SUCCESS] Partition Recovery - PASSED\n[INFO] Validating: Performance Convergence\n[SUCCESS] Performance Convergence - PASSED\n[INFO] Validating: All Convergence Scenarios Collection\n[SUCCESS] All Convergence Scenarios Collection - PASSED (5 scenarios)\n\n[INFO] ========== Mobile Convergence Test Results ==========\n[INFO] Total Tests: 6\n[INFO] Passed: 6\n[INFO] Failed: 0\n[INFO] Success Rate: 100.0%\n[INFO] ✅ PASS - anti_entropy_lifecycle\n[INFO] ✅ PASS - multi_device_sync\n[INFO] ✅ PASS - conflict_resolution\n[INFO] ✅ PASS - partition_recovery\n[INFO] ✅ PASS - performance_convergence\n[INFO] ✅ PASS - all_scenarios_collection\n[INFO] ================================================\n\n[SUCCESS] All mobile convergence tests passed!\n",
+      "stderr": "",
+      "exitCode": 0
+    }
+  ]
+}
