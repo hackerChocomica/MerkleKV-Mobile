@@ -445,9 +445,20 @@ jobs:
             ./scripts/build-flutter.sh
             echo "Running integration tests on Android device..."
             cd apps/flutter_demo
-            # Ensure integration_test dependency is available before running tests
-            if ! grep -q "integration_test:" pubspec.yaml; then echo "Adding missing integration_test dependency..." && sed -i '/dev_dependencies:/a\  integration_test:\n    sdk: flutter' pubspec.yaml && flutter pub get; fi
-            # Double-check dependency resolution
+            # Check if integration_test dependency exists in pubspec.yaml
+            echo "Checking integration_test dependency in pubspec.yaml..."
+            if grep -q "integration_test:" pubspec.yaml; then
+              echo "✅ integration_test dependency found in pubspec.yaml"
+            else
+              echo "❌ integration_test dependency missing from pubspec.yaml"
+              echo "Adding integration_test dependency..."
+              sed -i '/dev_dependencies:/a\  integration_test:\n    sdk: flutter' pubspec.yaml
+            fi
+            # Clean and resolve dependencies to avoid workspace conflicts
+            echo "Cleaning and resolving dependencies..."
+            flutter clean
+            flutter pub get
+            # Verify dependency resolution
             echo "Final dependency verification..."
             flutter pub deps | grep integration_test && echo "✅ integration_test dependency confirmed" || echo "❌ integration_test dependency missing"
             flutter test integration_test/ --dart-define=CI=true
