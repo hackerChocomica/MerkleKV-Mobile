@@ -56,21 +56,36 @@ class E2ETestRunner {
       }
     }
     
-    // For lifecycle tests, always allow execution for validation
+    // Handle lifecycle tests with proper validation based on device pool
     if (config.testSuite == 'lifecycle') {
-      logger.info('Lifecycle test suite: allowing execution for validation');
-      logger.success('Configuration validated');
-      return;
+      if (config.devicePool == 'cloud') {
+        logger.info('Lifecycle test suite with cloud device pool - checking credentials');
+        if (config.cloudProvider == 'browserstack') {
+          final username = Platform.environment['BROWSERSTACK_USERNAME'];
+          final accessKey = Platform.environment['BROWSERSTACK_ACCESS_KEY'];
+          if ((username == null || username.isEmpty) || (accessKey == null || accessKey.isEmpty)) {
+            logger.warning('BrowserStack credentials not found - switching to validation mode');
+            // For CI without credentials, run as structure validation
+            logger.success('Configuration validated');
+            return;
+          }
+        }
+      } else {
+        logger.info('Lifecycle test suite: allowing execution for validation');
+        logger.success('Configuration validated');
+        return;
+      }
     }
     
-    // Check cloud provider credentials
+    // Check cloud provider credentials for non-lifecycle tests
     if (config.devicePool == 'cloud' && config.cloudProvider != null) {
       if (config.cloudProvider == 'browserstack') {
         final username = Platform.environment['BROWSERSTACK_USERNAME'];
         final accessKey = Platform.environment['BROWSERSTACK_ACCESS_KEY'];
         if ((username == null || username.isEmpty) || (accessKey == null || accessKey.isEmpty)) {
-          logger.warning('BrowserStack credentials not found - running in validation mode');
+          throw Exception('BrowserStack credentials required for cloud testing. Set BROWSERSTACK_USERNAME and BROWSERSTACK_ACCESS_KEY environment variables.');
         }
+        logger.info('BrowserStack credentials verified');
       }
     }
     
@@ -358,7 +373,13 @@ class E2EConfig {
           break;
         case '--cloud-provider':
         case '--cloud':
-          if (i + 1 < args.length) cloudProvider = args[++i];
+          if (i + 1 < args.length) {
+            cloudProvider = args[++i];
+            // Automatically set device pool to cloud when cloud provider is specified
+            if (devicePool == 'emulator') {
+              devicePool = 'cloud';
+            }
+          }
           break;
         case '--test-file':
           if (i + 1 < args.length) testFile = args[++i];
@@ -375,6 +396,20 @@ class E2EConfig {
         case '--help':
           _printHelp();
           exit(0);
+      }
+    }
+
+    // Check environment variables if not set via command line
+    final envDevicePool = Platform.environment['DEVICE_POOL'];
+    if (envDevicePool != null && devicePool == 'emulator') {
+      devicePool = envDevicePool.toLowerCase();
+    }
+    
+    final envCloudProvider = Platform.environment['CLOUD_PROVIDER']; 
+    if (envCloudProvider != null && cloudProvider == null) {
+      cloudProvider = envCloudProvider.toLowerCase();
+      if (devicePool == 'emulator') {
+        devicePool = 'cloud';
       }
     }
 
