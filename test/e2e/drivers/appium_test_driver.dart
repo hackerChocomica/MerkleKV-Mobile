@@ -300,7 +300,7 @@ class AppiumTestDriver {
         throw StateError('Appium server returned status: ${response.statusCode}');
       }
       
-      await client.close();
+      client.close();
       
     } catch (error) {
       throw StateError('Appium server is not accessible: $error');
