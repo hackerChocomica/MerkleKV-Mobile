@@ -425,9 +425,7 @@ jobs:
             echo "Ensuring Android platform files are complete..."
             cd apps/flutter_demo
             # Only recreate Android platform if needed, avoiding project name conflicts
-            if [ ! -f "android/app/src/main/kotlin/com/merklekv/flutter_demo/MainActivity.kt" ]; then
-              flutter create --platforms=android --project-name=flutter_demo . || echo "Platform files may already exist"
-            fi
+            [ ! -f "android/app/src/main/kotlin/com/merklekv/flutter_demo/MainActivity.kt" ] && flutter create --platforms=android --project-name=flutter_demo . || echo "Platform files already exist"
             cd ../..
             echo "Cleaning and getting dependencies..."
             cd apps/flutter_demo
