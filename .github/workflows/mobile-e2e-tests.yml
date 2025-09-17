@@ -422,6 +422,10 @@ jobs:
             flutter doctor
             echo "Enabling Android platform support..."
             flutter config --enable-android
+            echo "Ensuring Android platform files are complete..."
+            cd apps/flutter_demo
+            flutter create --platforms=android .
+            cd ../..
             echo "Cleaning and getting dependencies..."
             cd apps/flutter_demo
             flutter clean
@@ -431,7 +435,7 @@ jobs:
             flutter devices
             echo "Building app for Android using reliable build script..."
             ./scripts/build-flutter.sh
-            echo "Running integration tests..."
+            echo "Running integration tests on Android device..."
             cd apps/flutter_demo
             flutter test integration_test/ --dart-define=CI=true
 
