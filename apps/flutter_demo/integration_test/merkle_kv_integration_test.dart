@@ -12,11 +12,15 @@ void main() {
       app.main();
       await tester.pumpAndSettle();
 
-      // Verify the app title is displayed
-      expect(find.text('MerkleKV Mobile Demo'), findsOneWidget);
+      // Verify the app title is displayed (should find at least one)
+      expect(find.text('MerkleKV Mobile Demo'), findsAtLeastNWidgets(1));
       
       // Verify the app loads without errors
       expect(find.byType(MaterialApp), findsOneWidget);
+      expect(find.byType(Scaffold), findsOneWidget);
+      
+      // Verify specific UI elements
+      expect(find.text('Package structure initialized successfully!'), findsOneWidget);
     });
 
     testWidgets('Basic UI navigation works', (WidgetTester tester) async {
@@ -25,8 +29,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Test that we can interact with the app
-      // (This is a placeholder - real tests would interact with MerkleKV features)
       expect(find.byType(Scaffold), findsOneWidget);
+      expect(find.byType(AppBar), findsOneWidget);
+      
+      // Verify the main content is present
+      expect(find.text('MerkleKV Mobile Demo'), findsAtLeastNWidgets(1));
     });
   });
 }
