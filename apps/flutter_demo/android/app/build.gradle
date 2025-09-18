@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.merklekv.mobile"
+    namespace = "com.merklekv.flutter_demo"
     compileSdk = 34
     ndkVersion = flutter.ndkVersion
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.merklekv.mobile"
+        applicationId = "com.merklekv.flutter_demo"
         minSdk = 21  // Support API 21+ for wide compatibility
         targetSdk = 34
         versionCode = 10001

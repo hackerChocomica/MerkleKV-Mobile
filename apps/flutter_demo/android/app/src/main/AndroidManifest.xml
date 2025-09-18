@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.merklekv.flutter_demo">
     <application
         android:label="flutter_demo"
         android:name="${applicationName}"
