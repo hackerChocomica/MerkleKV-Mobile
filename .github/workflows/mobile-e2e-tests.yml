@@ -443,29 +443,33 @@ jobs:
             flutter devices
             echo "Building app for Android using reliable build script..."
             ./scripts/build-flutter.sh
-            echo "Running integration tests on Android device..."
-            cd apps/flutter_demo
-            pwd
-            echo "Current working directory: $(pwd)"
-            echo "Verifying integration test file exists:"
-            ls -la integration_test/merkle_kv_integration_test.dart
-            echo "Checking integration_test dependency in pubspec.yaml..."
-            if grep -q "integration_test:" pubspec.yaml; then
-              echo "✅ integration_test dependency found in pubspec.yaml"
-            else
-              echo "❌ integration_test dependency missing from pubspec.yaml"
-              echo "Adding integration_test dependency..."
-              sed -i '/dev_dependencies:/a\  integration_test:\n    sdk: flutter' pubspec.yaml
-            fi
-            echo "Cleaning and resolving dependencies..."
-            flutter clean
-            flutter pub get
-            echo "Final dependency verification..."
-            flutter pub deps | grep integration_test
-            echo "✅ integration_test dependency confirmed"
-            echo "Starting integration tests on Android emulator..."
-            echo "Testing from directory: $(pwd)"
-            flutter test integration_test/merkle_kv_integration_test.dart --device-id emulator-5554 --dart-define=CI=true
+
+      - name: Run Flutter integration tests (Android)
+        if: matrix.platform == 'android'
+        working-directory: apps/flutter_demo
+        run: |
+          echo "Running integration tests on Android device..."
+          pwd
+          echo "Current working directory: $(pwd)"
+          echo "Verifying integration test file exists:"
+          ls -la integration_test/merkle_kv_integration_test.dart
+          echo "Checking integration_test dependency in pubspec.yaml..."
+          if grep -q "integration_test:" pubspec.yaml; then
+            echo "✅ integration_test dependency found in pubspec.yaml"
+          else
+            echo "❌ integration_test dependency missing from pubspec.yaml"
+            echo "Adding integration_test dependency..."
+            sed -i '/dev_dependencies:/a\  integration_test:\n    sdk: flutter' pubspec.yaml
+          fi
+          echo "Cleaning and resolving dependencies..."
+          flutter clean
+          flutter pub get
+          echo "Final dependency verification..."
+          flutter pub deps | grep integration_test
+          echo "✅ integration_test dependency confirmed"
+          echo "Starting integration tests on Android emulator..."
+          echo "Testing from directory: $(pwd)"
+          flutter test integration_test/merkle_kv_integration_test.dart --device-id emulator-5554 --dart-define=CI=true
 
       - name: Run Flutter integration tests (iOS - dry run)
         if: matrix.platform == 'ios'
