@@ -93,16 +93,16 @@ jobs:
       - name: Build APK for verification (optional)
         continue-on-error: true
         run: |
-          echo "🔨 Building APK to verify compilation..."
-          flutter build apk --debug --target-platform android-arm64 || echo "APK build failed but continuing..."
+          echo "🔨 Building APK using reliable build script..."
+          ./scripts/build-flutter.sh || echo "APK build failed but continuing..."
           
       - name: Test build artifacts (optional)
         continue-on-error: true
         run: |
           echo "✅ Verifying build artifacts..."
-          if [ -d "build/app/outputs/flutter-apk/" ]; then
-            ls -la build/app/outputs/flutter-apk/
-            file build/app/outputs/flutter-apk/app-debug.apk
+          if [ -d "apps/flutter_demo/build/app/outputs/flutter-apk/" ]; then
+            ls -la apps/flutter_demo/build/app/outputs/flutter-apk/
+            file apps/flutter_demo/build/app/outputs/flutter-apk/app-debug.apk
           else
             echo "APK build was skipped or failed"
           fi

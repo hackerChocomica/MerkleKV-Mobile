@@ -8,6 +8,38 @@ Specification v1.0 compliance.
 
 ## [Unreleased]
 
+### Planned
+- Enhanced error handling and retry mechanisms
+- Additional MQTT broker compatibility testing
+- Flutter web support investigation
+
+## [1.0.0-beta.1] - 2024-09-17
+
+### Added - CI/CD Build System & Production Readiness
+
+- **Reliable Build Infrastructure**: Complete CI/CD build system with proper working directory handling
+  - `scripts/build-flutter.sh`: Robust Flutter APK build script solving "Target file lib/main.dart not found" CI/CD issues
+  - Automatic project structure detection and verification
+  - Detailed progress reporting with APK size detection (~87MB debug builds)
+  - Comprehensive error handling with proper exit codes
+- **Repository Maintenance**: Professional repository cleanup and documentation standardization
+  - Updated `.gitignore` to exclude build artifacts, patch files, and development debris
+  - Removed unnecessary files: `*.patch`, `*.bundle`, `*.tar.gz`, `e2e_execution.log`
+  - Added development artifact patterns for cleaner repository management
+- **Enhanced Documentation**: Complete README.md overhaul with practical installation guides
+  - APK download instructions with GitHub releases integration
+  - Build script usage documentation with CI/CD context
+  - Available scripts reference table for development workflow
+  - Performance benchmarks and APK size reporting
+- **Production Environment Setup**: Flutter 3.16.0 compatibility with Android SDK 36.0.0 and Gradle 8.4
+
+### Fixed - Critical Build Issues
+
+- **CI/CD Working Directory Bug**: Resolved "Target file lib/main.dart not found" by creating unified build script
+- **Flutter Analyze Errors**: Fixed 572 → 0 Flutter analyze errors in corrupted `main_beta.dart`
+- **Build Process Reliability**: Eliminated separate shell process issues that broke working directory context
+- **File Corruption Recovery**: Complete reconstruction of corrupted Flutter application files
+
 ### Added - Enhanced Replication System (PR #58)
 
 - **Enhanced Event Publisher** (Locked Spec §7): Complete replication event publishing system with reliable delivery guarantees

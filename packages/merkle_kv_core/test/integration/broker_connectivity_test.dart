@@ -6,10 +6,10 @@ void main() {
   group('Basic MQTT Broker Connectivity', () {
     setUpAll(() async {
       // Validate test environment
-      expect(IntegrationTestConfig.mosquittoHost, isNotEmpty, 
-        reason: 'MQTT broker host must be configured');
-      expect(IntegrationTestConfig.mosquittoPort, greaterThan(0), 
-        reason: 'MQTT broker port must be valid');
+      expect(IntegrationTestConfig.mosquittoHost, isNotEmpty,
+          reason: 'MQTT broker host must be configured');
+      expect(IntegrationTestConfig.mosquittoPort, greaterThan(0),
+          reason: 'MQTT broker port must be valid');
     });
 
     test('MQTT connection establishment with Mosquitto broker', () async {
@@ -19,13 +19,13 @@ void main() {
       );
 
       final mqttClient = MqttClientImpl(config);
-      
+
       // Test connection
       await mqttClient.connect();
-      
+
       // Wait a moment for connection to establish
       await Future.delayed(Duration(milliseconds: 100));
-      
+
       // Test disconnection
       await mqttClient.disconnect();
     });
@@ -81,7 +81,8 @@ void main() {
         nodeId: 'test-topic-node-basic',
       );
 
-      final topicScheme = TopicScheme.create(config.topicPrefix, config.clientId);
+      final topicScheme =
+          TopicScheme.create(config.topicPrefix, config.clientId);
 
       // Test topic generation
       final commandTopic = topicScheme.commandTopic;
@@ -113,7 +114,8 @@ void main() {
       expect(getResponse.status, equals(ResponseStatus.error));
 
       // Test SET command
-      final setResponse = await processor.set('test-key', 'test-value', 'test-id-2');
+      final setResponse =
+          await processor.set('test-key', 'test-value', 'test-id-2');
       expect(setResponse.status, equals(ResponseStatus.ok));
 
       // Test GET command on existing key

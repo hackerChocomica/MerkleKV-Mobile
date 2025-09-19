@@ -1,0 +1,20 @@
+{
+  "platform": "android",
+  "testSuite": "network",
+  "devicePool": "cloud",
+  "timestamp": "2025-09-17T03:08:19.279547",
+  "totalTests": 1,
+  "passedTests": 1,
+  "failedTests": 0,
+  "totalDuration": 1119,
+  "results": [
+    {
+      "testName": "network_state_test",
+      "passed": true,
+      "duration": 1119,
+      "stdout": "[INFO] Starting Mobile Network State E2E Test Validation\n[INFO] Validating mobile network state test scenarios...\n[INFO] Validating: WiFi to Cellular Transition\n[SUCCESS] WiFi to Cellular Transition - PASSED\n[INFO] Validating: Cellular to WiFi Transition\n[SUCCESS] Cellular to WiFi Transition - PASSED\n[INFO] Validating: Airplane Mode Toggle\n[SUCCESS] Airplane Mode Toggle - PASSED\n[INFO] Validating: Network Interruption\n[SUCCESS] Network Interruption - PASSED\n[INFO] Validating: Poor Connectivity\n[SUCCESS] Poor Connectivity - PASSED\n[INFO] Validating: All Network Scenarios Collection\n[SUCCESS] All Network Scenarios Collection - PASSED (5 scenarios)\n\n[INFO] ========== Mobile Network State Test Results ==========\n[INFO] Total Tests: 6\n[INFO] Passed: 6\n[INFO] Failed: 0\n[INFO] Success Rate: 100.0%\n[INFO] ✅ PASS - wifi_to_cellular\n[INFO] ✅ PASS - cellular_to_wifi\n[INFO] ✅ PASS - airplane_mode_toggle\n[INFO] ✅ PASS - network_interruption\n[INFO] ✅ PASS - poor_connectivity\n[INFO] ✅ PASS - all_scenarios_collection\n[INFO] ================================================\n\n[SUCCESS] All mobile network state tests passed!\n",
+      "stderr": "",
+      "exitCode": 0
+    }
+  ]
+}

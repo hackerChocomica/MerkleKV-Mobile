@@ -1,0 +1,20 @@
+{
+  "platform": "android",
+  "testSuite": "lifecycle",
+  "devicePool": "cloud",
+  "timestamp": "2025-09-17T02:48:21.514492",
+  "totalTests": 1,
+  "passedTests": 1,
+  "failedTests": 0,
+  "totalDuration": 857,
+  "results": [
+    {
+      "testName": "mobile_lifecycle_test",
+      "passed": true,
+      "duration": 857,
+      "stdout": "[INFO] Starting Mobile Lifecycle E2E Test Validation\n[INFO] Validating mobile lifecycle test scenarios...\n[INFO] Validating: Background to Foreground Transition\n[SUCCESS] Background to Foreground Transition - PASSED\n[INFO] Validating: App Suspension\n[SUCCESS] App Suspension - PASSED\n[INFO] Validating: App Termination and Restart\n[SUCCESS] App Termination and Restart - PASSED\n[INFO] Validating: Memory Pressure\n[SUCCESS] Memory Pressure - PASSED\n[INFO] Validating: Rapid Lifecycle Transitions\n[SUCCESS] Rapid Lifecycle Transitions - PASSED\n[INFO] Validating: All Scenarios Collection\n[SUCCESS] All Scenarios Collection - PASSED (5 scenarios)\n\n[INFO] ========== Mobile Lifecycle Test Results ==========\n[INFO] Total Tests: 6\n[INFO] Passed: 6\n[INFO] Failed: 0\n[INFO] Success Rate: 100.0%\n[INFO] ✅ PASS - background_to_foreground\n[INFO] ✅ PASS - app_suspension\n[INFO] ✅ PASS - app_termination_restart\n[INFO] ✅ PASS - memory_pressure\n[INFO] ✅ PASS - rapid_transitions\n[INFO] ✅ PASS - all_scenarios_collection\n[INFO] ================================================\n\n[SUCCESS] All mobile lifecycle tests passed!\n",
+      "stderr": "",
+      "exitCode": 0
+    }
+  ]
+}

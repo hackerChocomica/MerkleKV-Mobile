@@ -79,3 +79,18 @@ Thumbs.db
 # Backup files
 *.bak
 *.backup
+
+# Development artifacts 
+*.patch
+*.bundle
+*.tar.gz
+e2e_execution.log
+package-lock.json
+
+# APK files (comment out if you want to track release APKs)
+*.apk
+!*release*.apk
+
+# Gradle
+.gradle/
+gradle-wrapper.jar

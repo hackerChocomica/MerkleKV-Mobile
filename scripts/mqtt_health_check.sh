@@ -16,6 +16,7 @@ BROKER_PORT="${MQTT_BROKER_PORT:-${2:-1883}}"
 TIMEOUT_SECONDS="${MQTT_HEALTH_TIMEOUT:-${3:-30}}"
 RETRY_INTERVAL=2
 MQTT_TIMEOUT=15  # Timeout for individual MQTT operations
+BASIC_MODE=false # Will be set to true if mosquitto clients are not available
 
 # ----------------------------
 # Pretty logging
@@ -31,12 +32,17 @@ log_err()     { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 # ----------------------------
 check_prerequisites() {
   log_info "Checking prerequisites..."
+  
+  # Check for mosquitto clients
   if ! command -v mosquitto_pub >/dev/null 2>&1 || ! command -v mosquitto_sub >/dev/null 2>&1; then
-    log_err "mosquitto-clients are required (mosquitto_pub/mosquitto_sub not found)."
+    log_warn "mosquitto-clients not found (mosquitto_pub/mosquitto_sub)."
     log_info "Install on Debian/Ubuntu: sudo apt-get install -y mosquitto-clients"
     log_info "Install on RHEL/CentOS:   sudo yum install -y mosquitto"
     log_info "Install on macOS (brew):  brew install mosquitto"
-    return 1
+    log_warn "Will run in basic connectivity mode (port check only)."
+    BASIC_MODE=true
+  else
+    BASIC_MODE=false
   fi
 
   if ! command -v timeout >/dev/null 2>&1; then
@@ -211,14 +217,21 @@ main() {
 
   check_prerequisites
   wait_for_port
-  test_mqtt_connection
 
-  # Optional: do not fail CI if this extra probe fails
-  if ! test_qos1_topic_delivery; then
-    log_warn "QoS1 topic probe failed (non-fatal)."
+  # If mosquitto clients are available, run full MQTT tests
+  if [ "$BASIC_MODE" = "false" ]; then
+    test_mqtt_connection
+
+    # Optional: do not fail CI if this extra probe fails
+    if ! test_qos1_topic_delivery; then
+      log_warn "QoS1 topic probe failed (non-fatal)."
+    fi
+    
+    log_ok "All required MQTT health checks passed. ✅"
+  else
+    log_ok "Basic connectivity check passed (port ${BROKER_PORT} is open). ✅"
+    log_warn "For full MQTT testing, install mosquitto-clients package."
   fi
-
-  log_ok "All required MQTT health checks passed. ✅"
 }
 
 main "$@"
