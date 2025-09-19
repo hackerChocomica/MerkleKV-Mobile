@@ -424,12 +424,14 @@ jobs:
             flutter config --enable-android
             echo "Ensuring Android platform files are complete..."
             cd apps/flutter_demo
-            # Backup pubspec.yaml before flutter create (which may overwrite it)
+            # Backup important files before flutter create (which may overwrite them)
             cp pubspec.yaml pubspec.yaml.backup
+            cp lib/main.dart lib/main.dart.backup 2>/dev/null || echo "main.dart backup not needed"
             # Only recreate Android platform if needed, avoiding project name conflicts
             [ ! -f "android/app/src/main/kotlin/com/merklekv/flutter_demo/MainActivity.kt" ] && flutter create --platforms=android --project-name=flutter_demo --org=com.merklekv . || echo "Platform files already exist"
-            # Restore pubspec.yaml to ensure all dependencies are preserved
+            # Restore important files to ensure all dependencies and code are preserved
             mv pubspec.yaml.backup pubspec.yaml
+            [ -f "lib/main.dart.backup" ] && mv lib/main.dart.backup lib/main.dart || echo "main.dart restore not needed"
             cd ../..
             echo "Cleaning and getting dependencies..."
             cd apps/flutter_demo
