@@ -171,13 +171,17 @@ Map<String, String> _parseArgs(List<String> args) {
   final config = <String, String>{};
   
   for (int i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--') && i + 1 < args.length) {
+    if (args[i].startsWith('--')) {
       final key = args[i].substring(2);
-      final value = args[i + 1];
-      config[key] = value;
-      i++; // Skip next argument as it's the value
-    } else if (args[i] == '--verbose') {
-      config['verbose'] = 'true';
+      // Check if next argument exists and is not another flag
+      if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+        final value = args[i + 1];
+        config[key] = value;
+        i++; // Skip next argument as it's the value
+      } else {
+        // Flag-style argument (no value)
+        config[key] = 'true';
+      }
     }
   }
   
