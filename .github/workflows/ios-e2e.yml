@@ -80,19 +80,40 @@ jobs:
           echo "Available iOS Simulators:"
           xcrun simctl list devices ios
           
-          # Check if our target simulator exists
-          if ! xcrun simctl list devices ios | grep -q "${{ env.IOS_DEVICE_NAME }} (${{ env.IOS_SIMULATOR_VERSION }})"; then
-            echo "Creating iOS Simulator: ${{ env.IOS_DEVICE_NAME }} (${{ env.IOS_SIMULATOR_VERSION }})"
-            xcrun simctl create "${{ env.IOS_DEVICE_NAME }}" \
-              "com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro" \
-              "com.apple.CoreSimulator.SimRuntime.iOS-${{ env.IOS_SIMULATOR_VERSION }}"
+          # Find the best available iPhone 15 Pro simulator
+          AVAILABLE_SIMULATOR=$(xcrun simctl list devices ios | grep "iPhone 15 Pro" | head -n1)
+          
+          if [ -z "$AVAILABLE_SIMULATOR" ]; then
+            echo "No iPhone 15 Pro simulator found, using iPhone 15 instead"
+            AVAILABLE_SIMULATOR=$(xcrun simctl list devices ios | grep "iPhone 15 (" | head -n1)
           fi
+          
+          if [ -z "$AVAILABLE_SIMULATOR" ]; then
+            echo "No iPhone 15 series simulator found, using latest iPhone"
+            AVAILABLE_SIMULATOR=$(xcrun simctl list devices ios | grep "iPhone" | grep -v "SE" | head -n1)
+          fi
+          
+          echo "Selected simulator: $AVAILABLE_SIMULATOR"
+          
+          # Extract UDID from the simulator line
+          SIMULATOR_UDID=$(echo "$AVAILABLE_SIMULATOR" | grep -o '[A-F0-9-]\{36\}')
+          echo "SELECTED_SIMULATOR_UDID=$SIMULATOR_UDID" >> $GITHUB_ENV
+          
+          # Extract device name and iOS version for reference
+          DEVICE_INFO=$(echo "$AVAILABLE_SIMULATOR" | sed 's/.*-- iOS \([0-9.]*\) --.*/\1/')
+          echo "SELECTED_IOS_VERSION=$DEVICE_INFO" >> $GITHUB_ENV
       
       - name: Boot iOS Simulator
         run: |
-          UDID=$(xcrun simctl list devices ios | grep "${{ env.IOS_DEVICE_NAME }} (${{ env.IOS_SIMULATOR_VERSION }})" | grep -o '[A-F0-9-]\{36\}' | head -n1)
+          UDID="${{ env.SELECTED_SIMULATOR_UDID }}"
           echo "Booting simulator with UDID: $UDID"
-          xcrun simctl boot "$UDID"
+          
+          # Check if simulator is already booted
+          if xcrun simctl list devices | grep "$UDID" | grep -q "Booted"; then
+            echo "Simulator is already booted"
+          else
+            xcrun simctl boot "$UDID"
+          fi
           
           # Wait for simulator to be ready
           echo "Waiting for simulator to be ready..."
@@ -149,15 +170,22 @@ jobs:
         working-directory: test/e2e/tests
         run: |
           echo "Running iOS E2E tests for suite: ${{ matrix.test-suite }}"
+          echo "Using simulator UDID: ${{ env.IOS_SIMULATOR_UDID }}"
           
           VERBOSE_FLAG=""
           if [ "${{ github.event.inputs.verbose || 'false' }}" == "true" ]; then
             VERBOSE_FLAG="--verbose"
           fi
           
-          dart ios_e2e_test.dart \
+          # Run tests with timeout and error handling
+          timeout 20m dart ios_e2e_test.dart \
             --suite ${{ matrix.test-suite }} \
-            $VERBOSE_FLAG
+            $VERBOSE_FLAG || {
+              echo "Test execution failed or timed out"
+              exit 1
+            }
+          
+          echo "iOS E2E tests completed successfully for suite: ${{ matrix.test-suite }}"
         env:
           IOS_SIMULATOR_UDID: ${{ env.IOS_SIMULATOR_UDID }}
           APPIUM_SERVER_URL: http://127.0.0.1:4723
