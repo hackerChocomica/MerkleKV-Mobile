@@ -124,17 +124,18 @@ jobs:
       - name: Install iOS app dependencies
         working-directory: apps/flutter_demo
         run: |
-          flutter pub get
-          flutter precache --ios
-          
-          # Clean any existing iOS build artifacts
+          # Clean any existing iOS build artifacts FIRST
           flutter clean
           rm -rf ios/Pods ios/.symlinks ios/Podfile.lock
-          
+
+          # Now get dependencies and generate xcconfig
+          flutter pub get
+          flutter precache --ios
+
           # Install CocoaPods dependencies with correct deployment target
           cd ios
           pod install --repo-update
-          
+
           # Verify deployment target is set correctly
           echo "Verifying iOS deployment target..."
           grep -r "IPHONEOS_DEPLOYMENT_TARGET" . || echo "Deployment target check complete"
