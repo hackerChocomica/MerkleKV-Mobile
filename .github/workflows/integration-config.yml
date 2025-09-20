@@ -222,31 +222,55 @@ jobs:
         run: |
           echo "🦟 Testing MQTT broker integration..."
           
-          # Start basic MQTT broker
-          docker-compose -f docker-compose.basic.yml up -d mosquitto || {
+          # Start MQTT broker with correct service name
+          docker-compose -f docker-compose.basic.yml up -d mosquitto-test || {
             echo "❌ Failed to start MQTT broker"
             exit 1
           }
           
           # Wait for broker to be ready
-          sleep 5
+          echo "⏳ Waiting for MQTT broker to be ready..."
+          sleep 10
+          
+          # Check if container is running and healthy
+          if ! docker-compose -f docker-compose.basic.yml ps | grep -q "Up.*healthy"; then
+            echo "❌ MQTT broker is not running or healthy"
+            echo "📋 Container logs:"
+            docker-compose -f docker-compose.basic.yml logs mosquitto-test
+            docker-compose -f docker-compose.basic.yml down
+            exit 1
+          fi
+          
+          echo "✅ MQTT broker is running and healthy"
           
           # Test broker connectivity
-          echo "Testing MQTT broker connectivity..."
+          echo "📡 Testing MQTT broker connectivity..."
           mosquitto_pub -h localhost -p 1883 -t test/integration -m "test_message" || {
             echo "❌ MQTT broker connectivity test failed"
-            docker-compose -f docker-compose.basic.yml logs mosquitto
+            echo "📋 Container logs:"
+            docker-compose -f docker-compose.basic.yml logs mosquitto-test
+            docker-compose -f docker-compose.basic.yml down
             exit 1
           }
           
+          echo "✅ MQTT publish test successful"
+          
           # Test broker subscription
-          timeout 5 mosquitto_sub -h localhost -p 1883 -t test/integration -C 1 | grep -q "test_message" || {
-            echo "⚠️ MQTT broker subscription test failed"
+          echo "📡 Testing MQTT broker subscription..."
+          {
+            timeout 5 mosquitto_sub -h localhost -p 1883 -t test/integration -C 1 > /tmp/mqtt_test_output &
+            SUB_PID=$!
+            sleep 2
+            mosquitto_pub -h localhost -p 1883 -t test/integration -m "test_subscription"
+            wait $SUB_PID 2>/dev/null || true
           }
           
-          # Check broker logs
-          echo "MQTT broker logs:"
-          docker-compose -f docker-compose.basic.yml logs mosquitto | tail -10
+          if [ -f /tmp/mqtt_test_output ] && grep -q "test_subscription" /tmp/mqtt_test_output; then
+            echo "✅ MQTT subscription test successful"
+            rm -f /tmp/mqtt_test_output
+          else
+            echo "⚠️ MQTT subscription test may have issues, but broker is functional"
+          fi
           
           # Cleanup
           docker-compose -f docker-compose.basic.yml down
@@ -290,7 +314,7 @@ jobs:
             chmod +x scripts/test_broker_connectivity.sh
             
             # Start broker for script testing
-            docker-compose -f docker-compose.basic.yml up -d mosquitto
+            docker-compose -f docker-compose.basic.yml up -d mosquitto-test
             sleep 3
             
             # Test the connectivity script
