@@ -179,6 +179,11 @@ jobs:
           # This would typically be installed via Xcode Additional Tools
           echo "Note: Network Link Conditioner should be installed manually for full network testing"
       
+      - name: Install coreutils for timeout command
+        run: |
+          # Install coreutils to get gtimeout on macOS
+          brew install coreutils
+      
       - name: Run iOS E2E Tests - ${{ matrix.test-suite }}
         working-directory: test/e2e/tests
         run: |
@@ -190,8 +195,8 @@ jobs:
             VERBOSE_FLAG="--verbose"
           fi
           
-          # Run tests with timeout and error handling
-          timeout 20m dart ios_e2e_test.dart \
+          # Run tests with timeout and error handling (using gtimeout on macOS)
+          gtimeout 20m dart ios_e2e_test.dart \
             --suite ${{ matrix.test-suite }} \
             $VERBOSE_FLAG || {
               echo "Test execution failed or timed out"
