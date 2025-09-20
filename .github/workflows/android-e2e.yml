@@ -166,13 +166,24 @@ jobs:
             echo "Running Android E2E tests for suite: ${{ matrix.test-suite }}"
             
             # Install APK on emulator
+            echo "🚀 Installing APK on Android emulator..."
             adb install apps/flutter_demo/build/app/outputs/flutter-apk/app-debug.apk
             
             # Wait for installation
             sleep 5
             
-            # Verify app is installed
-            adb shell pm list packages | grep com.merkle_kv.flutter_demo
+            # Verify app is installed with better error handling
+            echo "🔍 Verifying app installation..."
+            if adb shell pm list packages | grep -q "com.merklekv.flutter_demo"; then
+              echo "✅ App successfully installed: com.merklekv.flutter_demo"
+            else
+              echo "❌ App installation verification failed"
+              echo "📋 All installed packages:"
+              adb shell pm list packages | head -20
+              echo "🔍 Looking for MerkleKV packages:"
+              adb shell pm list packages | grep -i merkle || echo "No MerkleKV packages found"
+              exit 1
+            fi
             
             # Navigate to test directory and run tests
             cd test/e2e/tests
@@ -193,7 +204,7 @@ jobs:
             echo "Android E2E tests completed successfully for suite: ${{ matrix.test-suite }}"
         env:
           APPIUM_SERVER_URL: http://127.0.0.1:4723
-          TEST_PACKAGE_NAME: com.merkle_kv.flutter_demo
+          TEST_PACKAGE_NAME: com.merklekv.flutter_demo
           TEST_DEVICE_NAME: emulator-5554
           TEST_PLATFORM_VERSION: ${{ env.ANDROID_API_LEVEL }}
       
@@ -219,7 +230,7 @@ jobs:
           Test execution completed. Check job logs for detailed results.
           
           ## APK Information
-          - **Package**: com.merkle_kv.flutter_demo
+          - **Package**: com.merklekv.flutter_demo
           - **Build Type**: Debug
           - **Target Environment**: Testing
           
@@ -254,7 +265,7 @@ jobs:
           echo ""
           echo "📱 Platform: Android API ${{ env.ANDROID_API_LEVEL }}"
           echo "🧪 Test Suite: ${{ matrix.test-suite }}"
-          echo "📦 APK: com.merkle_kv.flutter_demo"
+          echo "📦 APK: com.merklekv.flutter_demo"
           echo "🏃 Environment: Testing"
           echo ""
           echo "📊 Results available in test artifacts"
