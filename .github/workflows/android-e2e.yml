@@ -174,7 +174,8 @@ jobs:
             
             # Verify app is installed with better error handling
             echo "🔍 Verifying app installation..."
-            if adb shell pm list packages | grep -q "com.merklekv.flutter_demo"; then
+            PACKAGE_CHECK=$(adb shell pm list packages | grep "com.merklekv.flutter_demo" || echo "NOT_FOUND")
+            if [ "$PACKAGE_CHECK" != "NOT_FOUND" ]; then
               echo "✅ App successfully installed: com.merklekv.flutter_demo"
             else
               echo "❌ App installation verification failed"
