@@ -118,9 +118,9 @@ jobs:
           
           # Build iOS release for device
           flutter build ios \
+            --target=lib/main.dart \
             --release \
             --no-codesign \
-            --target lib/main.dart \
             --dart-define=ENVIRONMENT=production \
             --build-name=${{ env.RELEASE_VERSION }} \
             --build-number=${{ env.BUILD_NUMBER }}
