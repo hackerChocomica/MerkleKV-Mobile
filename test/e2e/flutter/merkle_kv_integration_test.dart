@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import '../drivers/mobile_lifecycle_manager.dart';
 
 /// Simplified Flutter integration test framework for MerkleKV E2E testing
@@ -283,5 +284,89 @@ class MockMerkleKVClient {
     }
     // Simulate anti-entropy process
     await Future.delayed(Duration(seconds: 5));
+  }
+}
+
+/// Main entry point for running integration tests as a standalone script
+Future<void> main(List<String> args) async {
+  print('🧪 MerkleKV Flutter Integration Test Runner');
+  print('Arguments: ${args.join(' ')}');
+  
+  // Parse command line arguments
+  String? suite;
+  String? platform;
+  bool verbose = false;
+  
+  for (int i = 0; i < args.length; i++) {
+    switch (args[i]) {
+      case '--suite':
+        if (i + 1 < args.length) {
+          suite = args[i + 1];
+          i++; // Skip next argument
+        }
+        break;
+      case '--platform':
+        if (i + 1 < args.length) {
+          platform = args[i + 1];
+          i++; // Skip next argument
+        }
+        break;
+      case '--verbose':
+        verbose = true;
+        break;
+    }
+  }
+  
+  print('📋 Test Configuration:');
+  print('  Suite: ${suite ?? 'all'}');
+  print('  Platform: ${platform ?? 'android'}');
+  print('  Verbose: $verbose');
+  print('');
+  
+  try {
+    final tester = MerkleKVIntegrationTest();
+    
+    // Run specific test suite or all tests
+    switch (suite) {
+      case 'performance':
+        print('🚀 Running performance test suite...');
+        await tester.testMemoryPressureHandling();
+        await tester.testAntiEntropySyncDuringLifecycle();
+        break;
+      case 'integration':
+        print('🚀 Running integration test suite...');
+        await tester.testBackgroundTransitionPreservesConnection();
+        await tester.testAppSuspensionDataPersistence();
+        break;
+      case 'merkle_kv':
+        print('🚀 Running MerkleKV-specific test suite...');
+        await tester.testBackgroundTransitionPreservesConnection();
+        await tester.testAntiEntropySyncDuringLifecycle();
+        break;
+      case 'lifecycle':
+        print('🚀 Running lifecycle test suite...');
+        await tester.testBackgroundTransitionPreservesConnection();
+        await tester.testAirplaneModeToggleRecovery();
+        await tester.testAppSuspensionDataPersistence();
+        break;
+      case 'all':
+      default:
+        print('🚀 Running all integration tests...');
+        await tester.runAllTests();
+        break;
+    }
+    
+    await tester.cleanup();
+    print('');
+    print('✅ Integration tests completed successfully!');
+    
+  } catch (error, stackTrace) {
+    print('');
+    print('❌ Integration test execution failed:');
+    print('Error: $error');
+    if (verbose) {
+      print('Stack trace: $stackTrace');
+    }
+    exit(1);
   }
 }
