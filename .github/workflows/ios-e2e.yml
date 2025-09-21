@@ -148,7 +148,7 @@ jobs:
         working-directory: apps/flutter_demo
         run: |
           flutter build ios --simulator \
-            --target lib/main.dart \
+            --target=lib/main.dart \
             --debug \
             --dart-define=ENVIRONMENT=testing
       
@@ -338,7 +338,7 @@ jobs:
         working-directory: apps/flutter_demo
         run: |
           flutter build ios \
-            --target lib/main.dart \
+            --target=lib/main.dart \
             --release \
             --dart-define=ENVIRONMENT=testing
           
