@@ -153,13 +153,14 @@ jobs:
         run: |
           echo "🔧 Setting up Flutter integration test environment..."
           
-          # Install Flutter integration test dependencies
+          # Setup Flutter integration test environment
           cd apps/flutter_demo
-          flutter pub add integration_test --dev
-          flutter pub add flutter_test --dev --sdk=flutter
+          
+          # Get dependencies (integration_test is already available in Flutter SDK)
+          flutter pub get
           
           # Verify integration test setup
-          flutter packages get
+          flutter test --help > /dev/null 2>&1 && echo "✅ Flutter test available"
           echo "✅ Integration test environment ready"
       
       - name: Run Flutter Integration Tests - ${{ matrix.test-suite }}

@@ -170,11 +170,22 @@ jobs:
             --log-level info \
             --log ios-e2e-appium.log &
           
-          # Wait for Appium to start
-          sleep 10
-          
-          # Verify Appium is running
-          curl -f http://127.0.0.1:4723/status || exit 1
+          # Wait for Appium to start with retry mechanism
+          echo "Waiting for Appium server to start..."
+          for i in {1..30}; do
+            sleep 2
+            if curl -f http://127.0.0.1:4723/status >/dev/null 2>&1; then
+              echo "✅ Appium server started successfully after $((i*2)) seconds"
+              break
+            elif [ $i -eq 30 ]; then
+              echo "❌ Appium server failed to start after 60 seconds"
+              echo "📋 Appium logs:"
+              cat ios-e2e-appium.log || echo "No log file found"
+              exit 1
+            else
+              echo "Waiting for Appium... attempt $i/30"
+            fi
+          done
       
       - name: Install Network Link Conditioner
         run: |
