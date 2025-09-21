@@ -174,8 +174,8 @@ jobs:
             echo "🔍 Verifying app installation..."
             adb shell pm list packages | grep "com.merklekv.flutter_demo" > /tmp/package_check.txt || echo "NOT_FOUND" > /tmp/package_check.txt
             grep -q "com.merklekv.flutter_demo" /tmp/package_check.txt && echo "✅ App successfully installed: com.merklekv.flutter_demo" || { echo "❌ App installation failed"; adb shell pm list packages | head -20; exit 1; }
-            cd test/e2e/tests
-            timeout 20m dart android_e2e_test.dart --suite ${{ matrix.test-suite }} || { echo "❌ Test execution failed or timed out"; exit 1; }
+            echo "🧪 Starting Android E2E tests..."
+            cd test/e2e/tests && timeout 20m dart android_e2e_test.dart --suite ${{ matrix.test-suite }} || { echo "❌ Test execution failed or timed out"; exit 1; }
             echo "✅ Android E2E tests completed successfully for suite: ${{ matrix.test-suite }}"
         env:
           APPIUM_SERVER_URL: http://127.0.0.1:4723
