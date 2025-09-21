@@ -1,7 +1,6 @@
 # Contributing to MerkleKV Mobile
 
-Thank you for your interest in contributing to MerkleKV Mobile! This document provides guidelines for
-contributing to our MQTT-based distributed key-value store with Merkle tree replication.
+Thanks for contributing! This guide explains how to develop, test, and submit changes to the MerkleKV Mobile monorepo. The project centers on Flutter/Dart for the demo app and core packages, with MQTT-based replication and rigorous CI.
 
 ## 🚀 Latest Updates
 
@@ -42,56 +41,53 @@ deterministic behavior.
 
 ### Prerequisites
 
-- Node.js 18+ or React Native development environment
-- MQTT broker (Mosquitto, HiveMQ, etc.)
-- Git with Conventional Commits understanding
+- Flutter SDK 3.16.0+ (stable channel)
+- Dart SDK 3.0.0+
+- Android SDK (for Android builds)
+- Xcode 15+ on macOS (for iOS builds)
+- Docker (for running a local MQTT broker)
+- Git and Conventional Commits knowledge
 
-### Development Setup
-
-1. **Fork and clone the repository**
-
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/MerkleKV-Mobile.git
-   cd MerkleKV-Mobile
-   ```
-
-2. **Install dependencies**
-
-   ```bash
-   npm install
-   ```
-
-3. **Run tests**
-
-   ```bash
-   npm test
-   ```
-
-4. **Start development environment**
-
-   ```bash
-   npm run dev
-   ```
-
-## Build & Test (Core)
+### Repository Setup
 
 ```bash
-# Bootstrap dependencies
+# Clone your fork
+git clone https://github.com/YOUR_USERNAME/MerkleKV-Mobile.git
+cd MerkleKV-Mobile
+
+# Install Melos and bootstrap the workspace
+dart pub global activate melos
 melos bootstrap
 
-# Lint & format (strict)
-dart analyze
-dart format --output=none --set-exit-if-changed .
-
-# Tests (pure Dart for core; Flutter tests where applicable)
-dart test -p vm packages/merkle_kv_core
-flutter test
+# Fetch Flutter/Dart dependencies
+flutter pub get
+pushd packages/merkle_kv_core && dart pub get && popd
 ```
 
-**Notes:**
+## Build & Test
 
-- Do not log secrets; use MerkleKVConfig.toString() (masked).
-- For MQTT integration tests, ensure a broker is available (CI runs Mosquitto).
+Policy: Do not skip tests. Validate locally before committing and opening a PR.
+
+```bash
+# Static analysis (strict)
+dart analyze .
+dart format --output=none --set-exit-if-changed .
+
+# Core package tests (Dart VM)
+dart test -p vm packages/merkle_kv_core
+
+# Flutter tests for the demo app
+( cd apps/flutter_demo && flutter test )
+
+# Integration/E2E helpers
+./scripts/mqtt_health_check.sh
+./scripts/run_integration_tests.sh
+./scripts/run_e2e_tests.sh --platform android --suite all
+```
+
+Notes:
+- Sensitive data must not be logged; use masked configuration printing.
+- Integration tests require an MQTT broker; CI spins up Mosquitto.
 
 ### Formatting Requirement
 
@@ -187,12 +183,11 @@ test(core): add idempotency validation tests
 
 ### Code Quality
 
-- **TypeScript**: Strict mode enabled, no `any` types
-- **Testing**: Minimum 80% code coverage
-- **Linting**: ESLint + Prettier configured
-- **Documentation**: JSDoc for public APIs
-- **Error Handling**: Comprehensive error scenarios
-- **Logging**: Structured logging with appropriate levels
+- Dart/Flutter: idiomatic, strongly typed code
+- Testing: aim for 80%+ coverage for core logic
+- Linting/formatting: dart analyze + dart format enforced in CI
+- Documentation: update README/docs for user-facing changes
+- Error handling: cover edge cases and failure modes
 
 ### Architecture Principles
 
@@ -234,23 +229,14 @@ CBOR serialization includes golden vector tests to enforce deterministic output 
 - [ ] Payload size validation
 - [ ] Timeout behavior testing
 
-### Test Commands
+### Test Commands (Quick Reference)
 
 ```bash
-# Run all tests
-npm test
-
-# Run with coverage
-npm run test:coverage
-
-# Run spec compliance tests
-npm run test:spec
-
-# Run mobile performance tests
-npm run test:mobile
-
-# Run property-based tests
-npm run test:property
+dart analyze .
+dart test -p vm packages/merkle_kv_core
+( cd apps/flutter_demo && flutter test )
+./scripts/run_integration_tests.sh
+./scripts/run_e2e_tests.sh --platform android --suite all
 ```
 
 ## 📚 Documentation Requirements
@@ -377,4 +363,4 @@ By contributing to MerkleKV Mobile, you agree that your contributions will be li
 
 **Questions?** Open a GitHub Discussion or check our documentation at [docs/](./docs/).
 
-**Ready to contribute?** Start by browsing [good first issues](https://github.com/AI-Decenter/MerkleKV-Mobile/labels/good%20first%20issue)!
+**Ready to contribute?** Start by browsing good first issues.

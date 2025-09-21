@@ -412,17 +412,9 @@ jobs:
           
           cat ios-test-summary.md
       
-      - name: Comment PR with test results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const summary = fs.readFileSync('ios-test-summary.md', 'utf8');
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: summary
-            });
+      - name: Display test results summary
+        run: |
+          echo "🎯 iOS E2E Test Results Summary"
+          echo "================================"
+          cat ios-test-summary.md
+          echo "================================"

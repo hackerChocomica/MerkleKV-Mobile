@@ -2,6 +2,10 @@
 
 This guide provides comprehensive instructions for building and distributing iOS releases of the MerkleKV Mobile application.
 
+Related:
+- Automated workflow: .github/workflows/ios-release.yml
+- Local script: scripts/build_ios_release.sh
+
 ## 🚀 Quick Start
 
 ### Automated GitHub Release
