@@ -22,6 +22,10 @@ on:
         default: 'iOS Release Build'
         type: string
 
+permissions:
+  contents: write
+  releases: write
+
 env:
   FLUTTER_VERSION: '3.16.0'
   XCODE_VERSION: '15.0'
@@ -118,7 +122,6 @@ jobs:
           
           # Build iOS release for device
           flutter build ios \
-            --target=lib/main.dart \
             --release \
             --no-codesign \
             --dart-define=ENVIRONMENT=production \

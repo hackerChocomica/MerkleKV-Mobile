@@ -128,7 +128,6 @@ jobs:
           echo "Building Android app for testing..."
           
           flutter build apk \
-            --target=lib/main.dart \
             --debug \
             --dart-define=ENVIRONMENT=testing
           
