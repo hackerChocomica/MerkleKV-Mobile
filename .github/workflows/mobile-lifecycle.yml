@@ -40,7 +40,7 @@ env:
 jobs:
   mobile-lifecycle-tests:
     name: Mobile Lifecycle Tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform == 'ios' && 'macos-latest' || 'ubuntu-latest' }}
     timeout-minutes: 45
     
     strategy:
@@ -115,17 +115,37 @@ jobs:
         run: |
           echo "🔧 Setting up mobile lifecycle test environment..."
           
-          # Install Node.js for Appium
-          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-          sudo apt-get install -y nodejs
-          
-          # Install Appium
-          sudo npm install -g appium@next
-          sudo npm install -g @appium/doctor
-          
-          # Install Appium drivers
-          appium driver install uiautomator2
-          appium driver install xcuitest
+          if [ "${{ matrix.platform }}" == "ios" ]; then
+            # macOS setup for iOS testing
+            echo "📱 Setting up iOS testing environment on macOS..."
+            
+            # Install coreutils for gtimeout
+            brew install coreutils
+            
+            # Install Node.js for Appium (using Homebrew on macOS)
+            brew install node
+            
+            # Install Appium
+            npm install -g appium@next
+            npm install -g @appium/doctor
+            
+            # Install iOS driver
+            appium driver install xcuitest
+          else
+            # Linux setup for Android testing
+            echo "🤖 Setting up Android testing environment on Linux..."
+            
+            # Install Node.js for Appium
+            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+            
+            # Install Appium
+            sudo npm install -g appium@next
+            sudo npm install -g @appium/doctor
+            
+            # Install Android driver
+            appium driver install uiautomator2
+          fi
           
           # Verify installations
           appium --version
@@ -160,15 +180,29 @@ jobs:
           fi
           
           # Run mobile lifecycle tests with platform and suite specification
-          timeout 20m dart mobile_lifecycle_test.dart \
-            --platform ${{ matrix.platform }} \
-            --suite ${{ matrix.test-suite }} \
-            $VERBOSE_FLAG || {
-              echo "❌ Mobile lifecycle test execution failed or timed out"
-              echo "📋 Appium server logs:"
-              tail -50 ../../../appium.log
-              exit 1
-            }
+          if [ "${{ matrix.platform }}" == "ios" ]; then
+            # macOS - use gtimeout
+            gtimeout 20m dart mobile_lifecycle_test.dart \
+              --platform ${{ matrix.platform }} \
+              --suite ${{ matrix.test-suite }} \
+              $VERBOSE_FLAG || {
+                echo "❌ Mobile lifecycle test execution failed or timed out"
+                echo "📋 Appium server logs:"
+                tail -50 ../../../appium.log
+                exit 1
+              }
+          else
+            # Linux - use standard timeout  
+            timeout 20m dart mobile_lifecycle_test.dart \
+              --platform ${{ matrix.platform }} \
+              --suite ${{ matrix.test-suite }} \
+              $VERBOSE_FLAG || {
+                echo "❌ Mobile lifecycle test execution failed or timed out"
+                echo "📋 Appium server logs:"
+                tail -50 ../../../appium.log
+                exit 1
+              }
+          fi
           
           echo "✅ Mobile lifecycle tests completed successfully for ${{ matrix.platform }} - ${{ matrix.test-suite }}"
         env:

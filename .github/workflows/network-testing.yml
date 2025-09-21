@@ -110,8 +110,8 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y network-manager dnsutils netcat-openbsd iproute2
           else
-            # macOS network utilities
-            brew install netcat
+            # macOS network utilities and coreutils for gtimeout
+            brew install netcat coreutils
           fi
           
           # Install MQTT broker for network testing
@@ -216,16 +216,30 @@ jobs:
             PLATFORM_FLAG="--platform ios"
           fi
           
-          # Run network state tests
-          timeout 25m dart network_state_test.dart \
-            --suite ${{ matrix.test-suite }} \
-            $PLATFORM_FLAG \
-            $VERBOSE_FLAG || {
-              echo "❌ Network state test execution failed or timed out"
-              echo "📋 MQTT broker logs:"
-              tail -50 /tmp/mqtt/mosquitto.log
-              exit 1
-            }
+          # Run network state tests with appropriate timeout command
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            # Linux - use standard timeout
+            timeout 25m dart network_state_test.dart \
+              --suite ${{ matrix.test-suite }} \
+              $PLATFORM_FLAG \
+              $VERBOSE_FLAG || {
+                echo "❌ Network state test execution failed or timed out"
+                echo "📋 MQTT broker logs:"
+                tail -50 /tmp/mqtt/mosquitto.log
+                exit 1
+              }
+          else
+            # macOS - use gtimeout
+            gtimeout 25m dart network_state_test.dart \
+              --suite ${{ matrix.test-suite }} \
+              $PLATFORM_FLAG \
+              $VERBOSE_FLAG || {
+                echo "❌ Network state test execution failed or timed out"
+                echo "📋 MQTT broker logs:"
+                tail -50 /tmp/mqtt/mosquitto.log
+                exit 1
+              }
+          fi
           
           echo "✅ Network state tests completed successfully for ${{ matrix.test-suite }}"
         env:

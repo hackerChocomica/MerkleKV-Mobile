@@ -261,8 +261,8 @@ jobs:
           
           cd test/e2e/tests
           
-          # Run mobile lifecycle test with iOS platform
-          timeout 8m dart mobile_lifecycle_test.dart \
+          # Run mobile lifecycle test with iOS platform (using gtimeout on macOS)
+          gtimeout 8m dart mobile_lifecycle_test.dart \
             --platform ios \
             --suite lifecycle \
             --integration-mode || {

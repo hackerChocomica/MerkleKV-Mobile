@@ -120,8 +120,8 @@ jobs:
         run: |
           echo "📱 Setting up iOS environment..."
           
-          # Install iOS dependencies
-          brew install ios-deploy
+          # Install iOS dependencies and coreutils for gtimeout
+          brew install ios-deploy coreutils
           
           # Setup iOS simulator
           xcrun simctl list devices available
@@ -183,14 +183,26 @@ jobs:
             PLATFORM_FLAG="--platform ios"
           fi
           
-          # Run Flutter integration tests
-          timeout 30m dart merkle_kv_integration_test.dart \
-            --suite ${{ matrix.test-suite }} \
-            $PLATFORM_FLAG \
-            $VERBOSE_FLAG || {
-              echo "❌ Flutter integration test execution failed or timed out"
-              exit 1
-            }
+          # Use appropriate timeout command based on OS
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            # Linux - use standard timeout
+            timeout 30m dart merkle_kv_integration_test.dart \
+              --suite ${{ matrix.test-suite }} \
+              $PLATFORM_FLAG \
+              $VERBOSE_FLAG || {
+                echo "❌ Flutter integration test execution failed or timed out"
+                exit 1
+              }
+          else
+            # macOS - use gtimeout (requires coreutils)
+            gtimeout 30m dart merkle_kv_integration_test.dart \
+              --suite ${{ matrix.test-suite }} \
+              $PLATFORM_FLAG \
+              $VERBOSE_FLAG || {
+                echo "❌ Flutter integration test execution failed or timed out"
+                exit 1
+              }
+          fi
           
           echo "✅ Flutter integration tests completed successfully for ${{ matrix.test-suite }}"
         env:
