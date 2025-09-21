@@ -194,10 +194,9 @@ jobs:
           echo "Running iOS E2E tests for suite: ${{ matrix.test-suite }}"
           echo "Using simulator UDID: ${{ env.IOS_SIMULATOR_UDID }}"
           
+          # Set verbose flag if requested (using simple conditional)
           VERBOSE_FLAG=""
-          if [ "${{ github.event.inputs.verbose || 'false' }}" == "true" ]; then
-            VERBOSE_FLAG="--verbose"
-          fi
+          [ "${{ github.event.inputs.verbose || 'false' }}" = "true" ] && VERBOSE_FLAG="--verbose"
           
           # Run tests with timeout and error handling (using gtimeout on macOS)
           gtimeout 20m dart ios_e2e_test.dart \

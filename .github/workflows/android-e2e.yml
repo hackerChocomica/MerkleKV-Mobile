@@ -168,45 +168,15 @@ jobs:
           disable-animations: true
           script: |
             echo "Running Android E2E tests for suite: ${{ matrix.test-suite }}"
-            
-            # Install APK on emulator
             echo "🚀 Installing APK on Android emulator..."
             adb install apps/flutter_demo/build/app/outputs/flutter-apk/app-debug.apk
-            
-            # Wait for installation
             sleep 5
-            
-            # Verify app is installed with better error handling
             echo "🔍 Verifying app installation..."
-            PACKAGE_CHECK=$(adb shell pm list packages | grep "com.merklekv.flutter_demo" || echo "NOT_FOUND")
-            if [ "$PACKAGE_CHECK" != "NOT_FOUND" ]; then
-              echo "✅ App successfully installed: com.merklekv.flutter_demo"
-            else
-              echo "❌ App installation verification failed"
-              echo "📋 All installed packages:"
-              adb shell pm list packages | head -20
-              echo "🔍 Looking for MerkleKV packages:"
-              adb shell pm list packages | grep -i merkle || echo "No MerkleKV packages found"
-              exit 1
-            fi
-            
-            # Navigate to test directory and run tests
+            adb shell pm list packages | grep "com.merklekv.flutter_demo" > /tmp/package_check.txt || echo "NOT_FOUND" > /tmp/package_check.txt
+            grep -q "com.merklekv.flutter_demo" /tmp/package_check.txt && echo "✅ App successfully installed: com.merklekv.flutter_demo" || { echo "❌ App installation failed"; adb shell pm list packages | head -20; exit 1; }
             cd test/e2e/tests
-            
-            VERBOSE_FLAG=""
-            if [ "${{ github.event.inputs.verbose || 'false' }}" == "true" ]; then
-              VERBOSE_FLAG="--verbose"
-            fi
-            
-            # Run Android E2E tests with timeout
-            timeout 20m dart android_e2e_test.dart \
-              --suite ${{ matrix.test-suite }} \
-              $VERBOSE_FLAG || {
-                echo "Test execution failed or timed out"
-                exit 1
-              }
-            
-            echo "Android E2E tests completed successfully for suite: ${{ matrix.test-suite }}"
+            timeout 20m dart android_e2e_test.dart --suite ${{ matrix.test-suite }} || { echo "❌ Test execution failed or timed out"; exit 1; }
+            echo "✅ Android E2E tests completed successfully for suite: ${{ matrix.test-suite }}"
         env:
           APPIUM_SERVER_URL: http://127.0.0.1:4723
           TEST_PACKAGE_NAME: com.merklekv.flutter_demo
