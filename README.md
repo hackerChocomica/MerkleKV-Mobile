@@ -27,7 +27,7 @@ await client.delete('user:123');
 // 4. Real-time sync between devices happens automatically
 ```
 
-## � Try the Demo App
+## 📱 Try the Demo App
 
 ### Pre-built APK Download
 
@@ -80,11 +80,11 @@ flutter build apk --debug
 
 # APK location: build/app/outputs/flutter-apk/app-debug.apk
 ```
-| **Multi-Tenant Setup** | Topic validation, configuration examples | [→ API Docs](packages/merkle_kv_core/README.md#multi-tenant-configuration) |
-| **Architecture** | System design, protocols, components | [→ Architecture](docs/architecture.md) |
-| **API Reference** | Complete API documentation | [→ API Docs](packages/merkle_kv_core/README.md) |
-| **Deployment** | Production setup, MQTT broker config | [→ Deployment Guide](docs/DEPLOYMENT.md) |
-| **Contributing** | Development workflow, testing | [→ Contributing](CONTRIBUTING.md) |
+
+## 🧾 Releases
+
+- iOS: See [docs/iOS-Release-Guide.md](docs/iOS-Release-Guide.md) and the automated workflow [ios-release.yml](.github/workflows/ios-release.yml)
+- Android: See [docs/Android-Release-Guide.md](docs/Android-Release-Guide.md) for signing, release APK/AAB, and Play Console steps
 
 ## 🏗️ Architecture Overview
 
@@ -365,6 +365,7 @@ docker run -d --name test-mosquitto -p 1883:1883 eclipse-mosquitto:1.6
 | Script | Purpose | Usage |
 |--------|---------|-------|
 | `./scripts/build-flutter.sh` | Build Flutter APK reliably | `./scripts/build-flutter.sh` |
+| `./scripts/build_ios_release.sh` | Build iOS IPA locally (macOS) | `./scripts/build_ios_release.sh -v 1.2.0 -b 42` |
 | `./scripts/mqtt_health_check.sh` | Test MQTT broker connection | `./scripts/mqtt_health_check.sh` |
 | `./scripts/test_broker_connectivity.sh` | Comprehensive MQTT testing | `./scripts/test_broker_connectivity.sh` |
 | `./scripts/run_integration_tests.sh` | Run integration test suite | `./scripts/run_integration_tests.sh` |

@@ -39,6 +39,31 @@ flutter build apk --debug
 ./scripts/build-flutter.sh
 ```
 
+### `build_ios_release.sh`
+
+Purpose: Build a complete iOS IPA for distribution on macOS. Wraps flutter build ios, manages versioning, installs CocoaPods, and zips the Runner.app into an IPA with a build info summary.
+
+Usage:
+```bash
+# From project root (macOS only)
+./scripts/build_ios_release.sh -v 1.2.0 -b 42 -e production
+
+# Defaults if no flags provided
+./scripts/build_ios_release.sh
+```
+
+Key features:
+- ✅ Updates pubspec version to <version>+<build>
+- ✅ Cleans, fetches deps, runs pod install
+- ✅ Builds --release --no-codesign for device (arm64)
+- ✅ Produces releases/MerkleKV-Mobile-v<version>-<build>.ipa
+- ✅ Generates releases/build-info-v<version>-<build>.txt
+
+Requirements:
+- macOS with Xcode 15+
+- Flutter 3.16.0+
+- CocoaPods installed
+
 ## Requirements
 
 - Flutter SDK 3.16.0+
