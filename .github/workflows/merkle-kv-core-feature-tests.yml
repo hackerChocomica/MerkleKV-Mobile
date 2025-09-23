@@ -1,0 +1,267 @@
+name: MerkleKV Core Feature Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - feature/**
+      - fix/**
+  pull_request:
+    branches:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Test suite to run"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - integration
+          - mqtt
+          - replication
+          - anti_entropy
+          - merkle
+          - storage
+          - commands
+          - utils
+          - config
+          - unit
+      enable_coverage:
+        description: "Generate and upload coverage reports"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: merkle-kv-core-feature-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WORKING_DIR: packages/merkle_kv_core
+  DOCKER_COMPOSE_FILE: docker-compose.test.yml
+  DART_TEST_TIMEOUT: 5m
+
+jobs:
+  feature-tests:
+    name: "Suite: ${{ matrix.suite }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - integration
+          - mqtt
+          - replication
+          - anti_entropy
+          - merkle
+          - storage
+          - commands
+          - utils
+          - config
+          - unit
+        include:
+          - suite: all
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Docker Compose (v2 standalone)
+        run: |
+          set -euxo pipefail
+          if ! command -v docker-compose >/dev/null 2>&1; then
+            VER="2.20.0"
+            curl -L "https://github.com/docker/compose/releases/download/v${VER}/docker-compose-linux-x86_64" -o /tmp/docker-compose
+            sudo mv /tmp/docker-compose /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+          fi
+          docker-compose --version
+
+      - name: Set up Dart SDK
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Cache pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.dartServer
+          key: ${{ runner.os }}-dart-${{ hashFiles('packages/merkle_kv_core/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-dart-
+
+      - name: Show Dart versions
+        run: |
+          dart --version
+          echo "PWD: $(pwd)"
+
+      - name: Validate Docker Compose file
+        run: |
+          docker-compose -f "$DOCKER_COMPOSE_FILE" config >/dev/null
+
+      - name: Install OS test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl netcat-openbsd mosquitto-clients
+
+      - name: Start broker test environment (Mosquitto, HiveMQ, Toxiproxy)
+        run: |
+          set -euxo pipefail
+          docker-compose -f "$DOCKER_COMPOSE_FILE" up -d mosquitto-test hivemq-test toxiproxy
+
+          echo "Waiting for brokers to be ready..."
+          # Wait for Mosquitto (1883)
+          for i in {1..30}; do
+            if nc -z 127.0.0.1 1883; then echo "Mosquitto ready"; break; fi; sleep 2; done
+          if ! nc -z 127.0.0.1 1883; then
+            echo "Mosquitto not ready after wait";
+            docker-compose -f "$DOCKER_COMPOSE_FILE" logs --no-color mosquitto-test || true;
+            exit 1;
+          fi
+          # Wait for HiveMQ (1884)
+          for i in {1..30}; do
+            if nc -z 127.0.0.1 1884; then echo "HiveMQ ready"; break; fi; sleep 2; done
+          if ! nc -z 127.0.0.1 1884; then
+            echo "HiveMQ not ready after wait";
+            docker-compose -f "$DOCKER_COMPOSE_FILE" logs --no-color hivemq-test || true;
+            exit 1;
+          fi
+          # Wait for Toxiproxy API (8474)
+          for i in {1..30}; do
+            if nc -z 127.0.0.1 8474; then echo "Toxiproxy ready"; break; fi; sleep 2; done
+          if ! nc -z 127.0.0.1 8474; then
+            echo "Toxiproxy not ready after wait";
+            docker-compose -f "$DOCKER_COMPOSE_FILE" logs --no-color toxiproxy || true;
+            exit 1;
+          fi
+
+          echo "Container status:"
+          docker-compose -f "$DOCKER_COMPOSE_FILE" ps
+
+      - name: Prepare test workspace
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          dart pub get
+          dart pub deps --json | jq '.packages | length' || true
+
+      - name: Determine suite paths
+        id: suite
+        working-directory: ${{ env.WORKING_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUITE_INPUT="${{ github.event.inputs.suite || matrix.suite }}"
+          echo "Suite input: $SUITE_INPUT"
+
+          case "$SUITE_INPUT" in
+            all)
+              TEST_PATHS="test"
+              ;;
+            integration)
+              TEST_PATHS="test/integration"
+              ;;
+            mqtt)
+              TEST_PATHS="test/mqtt"
+              ;;
+            replication)
+              TEST_PATHS="test/replication"
+              ;;
+            anti_entropy)
+              TEST_PATHS="test/anti_entropy"
+              ;;
+            merkle)
+              TEST_PATHS="test/merkle"
+              ;;
+            storage)
+              TEST_PATHS="test/storage"
+              ;;
+            commands)
+              TEST_PATHS="test/commands"
+              ;;
+            utils)
+              TEST_PATHS="test/utils"
+              ;;
+            config)
+              TEST_PATHS="test/config"
+              ;;
+            unit)
+              TEST_PATHS="test/unit"
+              ;;
+            *)
+              echo "Unknown suite: $SUITE_INPUT" >&2
+              exit 2
+              ;;
+          esac
+
+          echo "paths=$TEST_PATHS" >> $GITHUB_OUTPUT
+
+      - name: Run feature tests (${{ steps.suite.outputs.paths }})
+        working-directory: ${{ env.WORKING_DIR }}
+        env:
+          MQTT_HOST: 127.0.0.1
+          MQTT_PORT: 1883
+          HIVEMQ_PORT: 1884
+          TOXIPROXY_API: http://127.0.0.1:8474
+        run: |
+          set -euxo pipefail
+          # Some tests can be heavier, use fewer parallel jobs to reduce flakiness
+          JOBS=2
+          TIMEOUT="${{ env.DART_TEST_TIMEOUT }}"
+
+          # Print a summary of selected tests
+          echo "Selecting tests under: ${{ steps.suite.outputs.paths }}"
+          if [ -d "${{ steps.suite.outputs.paths }}" ]; then
+            find "${{ steps.suite.outputs.paths }}" -maxdepth 2 -type f -name "*.dart" | sort
+          fi
+
+          # Run tests
+          dart test -r expanded --timeout "$TIMEOUT" -j "$JOBS" "${{ steps.suite.outputs.paths }}"
+
+      - name: Generate coverage (LCOV)
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.enable_coverage == 'true' }}
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          set -euxo pipefail
+          rm -rf coverage || true
+          dart test --coverage=coverage "${{ steps.suite.outputs.paths }}"
+          dart run coverage:format_coverage \
+            --lcov \
+            --in=coverage \
+            --out=coverage/lcov.info \
+            --packages=.dart_tool/package_config.json \
+            --report-on=lib
+          ls -la coverage || true
+
+      - name: Collect broker logs
+        if: always()
+        run: |
+          mkdir -p artifacts
+          docker-compose -f "$DOCKER_COMPOSE_FILE" logs --no-color mosquitto-test > artifacts/mosquitto.log 2>&1 || true
+          docker-compose -f "$DOCKER_COMPOSE_FILE" logs --no-color hivemq-test > artifacts/hivemq.log 2>&1 || true
+          docker-compose -f "$DOCKER_COMPOSE_FILE" logs --no-color toxiproxy > artifacts/toxiproxy.log 2>&1 || true
+          docker ps -a > artifacts/docker-ps.txt 2>&1 || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkv-core-${{ matrix.suite }}-artifacts
+          path: |
+            artifacts/*.log
+            artifacts/*.txt
+            ${{ env.WORKING_DIR }}/coverage/**
+            ${{ env.WORKING_DIR }}/**/*.log
+          retention-days: 7
+
+      - name: Tear down broker environment
+        if: always()
+        run: |
+          docker-compose -f "$DOCKER_COMPOSE_FILE" down -v || true
