@@ -345,8 +345,9 @@ Future<void> subscribeAndProbe({
   Timer? timeoutTimer;
   
   try {
-    // Subscribe first
-    await listener.subscribe(topic, (topic, payload) {
+    // Subscribe first with single-level wildcard to catch probe subtopic
+    final subscriptionFilter = topic.endsWith('/+') || topic.endsWith('/#') ? topic : '$topic/+';
+    await listener.subscribe(subscriptionFilter, (topic, payload) {
       if (payload.contains('__probe__') && !completer.isCompleted) {
         completer.complete();
       }
