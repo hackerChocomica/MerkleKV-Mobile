@@ -330,11 +330,55 @@ class MqttClientImpl implements MqttClientInterface {
         message.payload.message,
       );
 
-      final handler = _subscriptions[topic];
-      if (handler != null) {
-        handler(topic, payload);
-      }
+      // Dispatch to all handlers whose subscription filter matches this topic
+      // Supports MQTT wildcards: '+' (single level) and '#' (multi-level at end)
+      _subscriptions.forEach((filter, handler) {
+        if (_topicMatches(filter, topic)) {
+          handler(topic, payload);
+        }
+      });
     }
+  }
+
+  /// Determines whether a topic filter matches a concrete topic name per MQTT rules.
+  /// - '+' matches exactly one level
+  /// - '#' matches any number of levels and must be the last level
+  bool _topicMatches(String filter, String topic) {
+    if (filter == topic) return true;
+
+    final fParts = filter.split('/');
+    final tParts = topic.split('/');
+
+    int fi = 0;
+    int ti = 0;
+
+    while (fi < fParts.length && ti < tParts.length) {
+      final f = fParts[fi];
+      if (f == '#') {
+        // '#' must be last in filter; it matches the rest of the topic
+        return fi == fParts.length - 1;
+      }
+      if (f == '+') {
+        // '+' matches exactly one level
+        fi++;
+        ti++;
+        continue;
+      }
+      if (f != tParts[ti]) {
+        return false;
+      }
+      fi++;
+      ti++;
+    }
+
+    // If filter has remaining parts
+    if (fi < fParts.length) {
+      // Only valid remaining part can be a terminal '#'
+      return fi == fParts.length - 1 && fParts[fi] == '#';
+    }
+
+    // If topic has remaining parts, filter must have ended with '#'
+    return ti == tParts.length;
   }
 
   /// Update connection state and notify listeners.

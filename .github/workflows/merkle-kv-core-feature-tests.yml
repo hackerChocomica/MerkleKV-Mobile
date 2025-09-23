@@ -232,6 +232,10 @@ jobs:
         env:
           MQTT_HOST: 127.0.0.1
           MQTT_PORT: 1883
+          MQTT_TEST_HOST: 127.0.0.1
+          MQTT_TEST_PORT: 1883
+          MQTT_TEST_USE_TLS: "false"
+          IT_REQUIRE_BROKER: 1
           HIVEMQ_PORT: 1884
           TOXIPROXY_API: http://127.0.0.1:8474
         run: |
