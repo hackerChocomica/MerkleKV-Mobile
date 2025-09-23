@@ -128,6 +128,12 @@ jobs:
             ls -la "$SNAP_DIR" || true
           fi
 
+          # If non-AOT snapshot is still missing but AOT exists, create a symlink for compatibility
+          if [ ! -f "$SNAP_DIR/frontend_server.dart.snapshot" ] && [ -f "$SNAP_DIR/frontend_server_aot.dart.snapshot" ]; then
+            echo "Creating symlink: frontend_server.dart.snapshot -> frontend_server_aot.dart.snapshot"
+            ln -sf "$SNAP_DIR/frontend_server_aot.dart.snapshot" "$SNAP_DIR/frontend_server.dart.snapshot"
+          fi
+
           # Final sanity check
           if [ ! -f "$SNAP_DIR/frontend_server.dart.snapshot" ]; then
             echo "frontend_server.dart.snapshot still missing" >&2
