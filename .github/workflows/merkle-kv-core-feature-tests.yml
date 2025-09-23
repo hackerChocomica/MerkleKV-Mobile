@@ -247,10 +247,11 @@ jobs:
           fi
 
           # Run tests (with one retry on failure to reduce flakiness)
-          if ! dart test -r expanded --timeout "$TIMEOUT" -j "$JOBS" "${{ steps.suite.outputs.paths }}"; then
+          # Use VM source compiler to avoid dependency on frontend_server snapshots
+          if ! dart test -r expanded --platform vm --compiler source --timeout "$TIMEOUT" -j "$JOBS" "${{ steps.suite.outputs.paths }}"; then
             echo "First run failed, retrying once..."
             sleep 2
-            dart test -r expanded --timeout "$TIMEOUT" -j "$JOBS" "${{ steps.suite.outputs.paths }}"
+            dart test -r expanded --platform vm --compiler source --timeout "$TIMEOUT" -j "$JOBS" "${{ steps.suite.outputs.paths }}"
           fi
 
       - name: Generate coverage (LCOV)
@@ -259,7 +260,8 @@ jobs:
         run: |
           set -euxo pipefail
           rm -rf coverage || true
-          dart test --coverage=coverage "${{ steps.suite.outputs.paths }}" || echo "Coverage test run returned non-zero, continuing to format coverage if files exist"
+          # Use VM source compiler here as well to avoid frontend_server
+          dart test --platform vm --compiler source --coverage=coverage "${{ steps.suite.outputs.paths }}" || echo "Coverage test run returned non-zero, continuing to format coverage if files exist"
           dart run coverage:format_coverage \
             --lcov \
             --in=coverage \
