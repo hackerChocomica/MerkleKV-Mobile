@@ -355,8 +355,8 @@ Future<void> subscribeAndProbe({
     // Small delay for subscription to propagate
     await Future.delayed(const Duration(milliseconds: 100));
     
-    // Send probe message
-    await prober.publish('$topic/__probe__', '__probe__');
+  // Send probe message as retained so late subscribers still receive it
+  await prober.publish('$topic/__probe__', '__probe__', forceRetainFalse: false);
     
     // Set timeout
     timeoutTimer = Timer(timeout, () {
