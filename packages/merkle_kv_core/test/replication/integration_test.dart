@@ -110,7 +110,11 @@ Future<void> connectOrSkip(MqttClientInterface c, {
     // Set timeout
     Timer? timeoutTimer = Timer(timeout, () {
       if (!completer.isCompleted) {
-        completer.completeError(TimeoutException('Connection timeout', timeout));
+        completer.completeError(TimeoutException(
+          'Connection timeout',
+          operation: 'connect/${name}',
+          timeoutMs: timeout.inMilliseconds,
+        ));
       }
     });
     
@@ -231,7 +235,11 @@ Future<bool> _tryConnectOnce(String host, int port, MqttTestConfig cfg, Duration
     // Set timeout
     Timer? timeoutTimer = Timer(timeout, () {
       if (!completer.isCompleted) {
-        completer.completeError(TimeoutException('Connection timeout', timeout));
+        completer.completeError(TimeoutException(
+          'Connection timeout',
+          operation: 'probeConnect',
+          timeoutMs: timeout.inMilliseconds,
+        ));
       }
     });
     
@@ -307,7 +315,11 @@ Future<void> waitForConnected(MqttClientInterface mqtt, {Duration timeout = cons
     // Set timeout
     timeoutTimer = Timer(timeout, () {
       if (!completer.isCompleted) {
-        completer.completeError(TimeoutException('Connection timeout', timeout));
+        completer.completeError(TimeoutException(
+          'Connection timeout',
+          operation: 'waitConnected',
+          timeoutMs: timeout.inMilliseconds,
+        ));
       }
     });
     
@@ -349,7 +361,11 @@ Future<void> subscribeAndProbe({
     // Set timeout
     timeoutTimer = Timer(timeout, () {
       if (!completer.isCompleted) {
-        completer.completeError(TimeoutException('Subscription probe timeout for topic: $topic', timeout));
+        completer.completeError(TimeoutException(
+          'Subscription probe timeout for topic: $topic',
+          operation: 'subscribeProbe',
+          timeoutMs: timeout.inMilliseconds,
+        ));
       }
     });
     
@@ -366,8 +382,12 @@ Future<void> waitForOutboxDrained(ReplicationEventPublisherImpl publisher, {Dura
   
   while (DateTime.now().isBefore(deadline)) {
     final status = await Future.any([
-      publisher.outboxStatus.first,
-      Future.delayed(const Duration(seconds: 1)).then((_) => throw TimeoutException('Status timeout', const Duration(seconds: 1)))
+  publisher.outboxStatus.first,
+  Future.delayed(const Duration(seconds: 1)).then((_) => throw TimeoutException(
+    'Status timeout',
+    operation: 'outboxStatusPoll',
+    timeoutMs: const Duration(seconds: 1).inMilliseconds,
+      ))
     ]);
     
     if (status.pendingEvents == 0) {
@@ -375,7 +395,11 @@ Future<void> waitForOutboxDrained(ReplicationEventPublisherImpl publisher, {Dura
     }
     await Future.delayed(const Duration(milliseconds: 100));
   }
-  throw TimeoutException('Outbox did not drain within timeout', timeout);
+  throw TimeoutException(
+    'Outbox did not drain within timeout',
+    operation: 'outboxDrain',
+    timeoutMs: timeout.inMilliseconds,
+  );
 }
 
 /// Generate unique test ID for topic prefixes and client IDs
@@ -449,7 +473,11 @@ void main() {
         // Wait for event with explicit timeout
         final receivedEvent = await eventReceived.future.timeout(
           const Duration(seconds: 15),
-          onTimeout: () => throw TimeoutException('Event not received within timeout', const Duration(seconds: 15)),
+          onTimeout: () => throw TimeoutException(
+            'Event not received within timeout',
+            operation: 'eventWait',
+            timeoutMs: const Duration(seconds: 15).inMilliseconds,
+          ),
         );
 
         // Verify event data
@@ -607,7 +635,11 @@ void main() {
         // Verify outbox has queued events
         final outboxStatus = await publisher.outboxStatus.first.timeout(
           const Duration(seconds: 5),
-          onTimeout: () => throw TimeoutException('Outbox status timeout', const Duration(seconds: 5)),
+          onTimeout: () => throw TimeoutException(
+            'Outbox status timeout',
+            operation: 'outboxStatusAwait',
+            timeoutMs: const Duration(seconds: 5).inMilliseconds,
+          ),
         );
         expect(outboxStatus.pendingEvents, greaterThan(0));
 
