@@ -86,7 +86,7 @@ jobs:
       - name: Set up Dart SDK
         uses: dart-lang/setup-dart@v1
         with:
-          sdk: "3.7.3"
+          sdk: "3.4.4"
 
       - name: Ensure pinned Dart SDK is active (fix DART_HOME/PATH)
         shell: bash
