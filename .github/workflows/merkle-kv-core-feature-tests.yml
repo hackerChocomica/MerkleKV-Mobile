@@ -88,6 +88,20 @@ jobs:
         with:
           sdk: "3.7.3"
 
+      - name: Ensure pinned Dart SDK is active (fix DART_HOME/PATH)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          which dart
+          dart --version
+          BIN_DIR="$(dirname "$(realpath "$(which dart)")")"
+          SDK_HOME="$(dirname "$BIN_DIR")"
+          echo "Using dart bin: $BIN_DIR"
+          echo "Setting DART_HOME: $SDK_HOME"
+          echo "DART_HOME=$SDK_HOME" >> "$GITHUB_ENV"
+          # Ensure bin is at front of PATH for this and subsequent steps
+          echo "$BIN_DIR" >> "$GITHUB_PATH"
+
       - name: Cache pub dependencies
         uses: actions/cache@v4
         with:
@@ -154,6 +168,13 @@ jobs:
           # Warm up Dart runtime
           echo 'void main(){print("warmup");}' > /tmp/warmup.dart
           dart run /tmp/warmup.dart || true
+
+      - name: Sanity check Dart path and version before tests
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          set -euxo pipefail
+          which dart
+          dart --version
 
       - name: Determine suite paths
         id: suite
