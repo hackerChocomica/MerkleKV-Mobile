@@ -22,6 +22,7 @@ export 'src/mqtt/mqtt_client_impl.dart';
 export 'src/mqtt/topic_scheme.dart';
 export 'src/mqtt/topic_router.dart';
 export 'src/mqtt/connection_lifecycle.dart';
+export 'src/mqtt/battery_aware_lifecycle.dart';
 export 'src/mqtt/connection_logger.dart';
 export 'src/mqtt/topic_validator.dart';
 
@@ -52,3 +53,4 @@ export 'src/merkle/merkle_tree.dart';
 
 // Utilities
 export 'src/utils/uuid_generator.dart';
+export 'src/utils/battery_awareness.dart';
