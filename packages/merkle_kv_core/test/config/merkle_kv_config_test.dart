@@ -1,6 +1,7 @@
 import 'package:test/test.dart';
 import 'package:merkle_kv_core/src/config/merkle_kv_config.dart';
 import 'package:merkle_kv_core/src/config/invalid_config_exception.dart';
+import 'package:merkle_kv_core/src/config/resource_limits.dart';
 
 void main() {
   group('MerkleKVConfig', () {
@@ -595,6 +596,64 @@ void main() {
         expect(config.tombstoneRetentionHours, equals(24));
         expect(config.persistenceEnabled, isFalse);
         expect(config.topicPrefix, equals('mkv'));
+      });
+
+      test('resourceLimits round-trips via JSON and copyWith', () {
+        final cfg = MerkleKVConfig(
+          mqttHost: 'localhost',
+          clientId: 'c1',
+          nodeId: 'n1',
+          // Provide some limits; these are advisory and not enforced.
+          resourceLimits: ResourceLimits(
+            memoryLimitBytes: 1024,
+            storageLimitBytes: 2048,
+            networkUploadKbps: 512,
+            networkDownloadKbps: 1024,
+            cpuLimitPercent: 50,
+            ioReadIops: 100,
+            ioWriteIops: 200,
+            maxConcurrentOperations: 8,
+            mqttMaxMessagesPerSecond: 20,
+            outboxMaxBytes: 4096,
+            inMemoryCacheMaxBytes: 8192,
+          ),
+        );
+
+        final json = cfg.toJson();
+        expect(json['resourceLimits'], isA<Map<String, dynamic>?>());
+
+        final restored = MerkleKVConfig.fromJson(json);
+        expect(restored.resourceLimits?.memoryLimitBytes, 1024);
+        expect(restored.resourceLimits?.cpuLimitPercent, 50);
+
+        final updated = restored.copyWith(
+          resourceLimits: restored.resourceLimits?.copyWith(
+            cpuLimitPercent: 60,
+          ),
+        );
+        expect(updated.resourceLimits?.cpuLimitPercent, 60);
+      });
+
+      test('resourceLimits validation rejects invalid values', () {
+        expect(
+          () => MerkleKVConfig(
+            mqttHost: 'localhost',
+            clientId: 'c1',
+            nodeId: 'n1',
+            resourceLimits: const ResourceLimits(cpuLimitPercent: 0),
+          ),
+          throwsA(isA<InvalidConfigException>()
+              .having((e) => e.parameter, 'parameter', 'resourceLimits')),
+        );
+        expect(
+          () => MerkleKVConfig(
+            mqttHost: 'localhost',
+            clientId: 'c1',
+            nodeId: 'n1',
+            resourceLimits: const ResourceLimits(memoryLimitBytes: -1),
+          ),
+          throwsA(isA<InvalidConfigException>()),
+        );
       });
     });
 
