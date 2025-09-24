@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:meta/meta.dart';
+
 import '../config/merkle_kv_config.dart';
 import '../replication/metrics.dart';
 import 'connection_logger.dart';
@@ -156,6 +158,14 @@ class DefaultConnectionLifecycleManager implements ConnectionLifecycleManager {
 
   @override
   bool get isConnected => _currentState == ConnectionState.connected;
+
+  /// Get the configuration for subclass access.
+  @protected
+  MerkleKVConfig get config => _config;
+
+  /// Get the MQTT client for subclass access.
+  @protected
+  MqttClientInterface get mqttClient => _mqttClient;
 
   /// Initialize connection state monitoring.
   void _initializeStateMonitoring() {
