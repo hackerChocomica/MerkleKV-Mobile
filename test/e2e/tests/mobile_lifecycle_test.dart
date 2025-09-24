@@ -95,8 +95,8 @@ void main(List<String> args) async {
       if (allScenarios.isEmpty) {
         throw Exception('No scenarios returned from getAllScenarios()');
       }
-      if (allScenarios.length < 5) {
-        throw Exception('Expected at least 5 scenarios, got ${allScenarios.length}');
+      if (allScenarios.length < 7) {
+        throw Exception('Expected at least 7 scenarios (including battery tests), got ${allScenarios.length}');
       }
       results['all_scenarios_collection'] = true;
       passedTests++;
@@ -104,6 +104,34 @@ void main(List<String> args) async {
     } catch (e) {
       results['all_scenarios_collection'] = false;
       print('[ERROR] All Scenarios Collection - FAILED: $e');
+    }
+    
+    // Test 7: Android Battery Optimization Scenario
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: Android Battery Optimization');
+      final scenario = MobileLifecycleScenarios.androidBatteryOptimizationScenario();
+      await _validateScenario(scenario, 'Android Battery Optimization');
+      results['android_battery_optimization'] = true;
+      passedTests++;
+      print('[SUCCESS] Android Battery Optimization - PASSED');
+    } catch (e) {
+      results['android_battery_optimization'] = false;
+      print('[ERROR] Android Battery Optimization - FAILED: $e');
+    }
+    
+    // Test 8: iOS Low Power Mode Scenario
+    totalTests++;
+    try {
+      if (verbose) print('[INFO] Validating: iOS Low Power Mode');
+      final scenario = MobileLifecycleScenarios.iOSLowPowerModeScenario();
+      await _validateScenario(scenario, 'iOS Low Power Mode');
+      results['ios_low_power_mode'] = true;
+      passedTests++;
+      print('[SUCCESS] iOS Low Power Mode - PASSED');
+    } catch (e) {
+      results['ios_low_power_mode'] = false;
+      print('[ERROR] iOS Low Power Mode - FAILED: $e');
     }
     
   } catch (e) {
