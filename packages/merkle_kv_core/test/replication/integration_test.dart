@@ -592,8 +592,9 @@ void main() {
         // Verify all events received
         expect(receivedEvents.length, equals(6));
         
-        final pub1Events = receivedEvents.where((e) => e.nodeId.contains('-1')).toList();
-        final pub2Events = receivedEvents.where((e) => e.nodeId.contains('-2')).toList();
+  // Use precise suffix matching to avoid accidental matches from testId contents
+  final pub1Events = receivedEvents.where((e) => e.nodeId.endsWith('-1')).toList();
+  final pub2Events = receivedEvents.where((e) => e.nodeId.endsWith('-2')).toList();
         
         expect(pub1Events.length, equals(3));
         expect(pub2Events.length, equals(3));
