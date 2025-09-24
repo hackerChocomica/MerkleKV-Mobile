@@ -25,7 +25,9 @@ abstract class LWWResolver {
   /// 
   /// Limits future timestamps to now + 5 minutes per §5.7.
   /// Original timestamps are preserved unchanged for replication propagation.
-  int clampTimestamp(int timestampMs);
+  ///
+  /// Optional [nowMs] can be provided for deterministic behavior in tests.
+  int clampTimestamp(int timestampMs, {int? nowMs});
 }
 
 /// Default implementation of LWW conflict resolution
@@ -72,8 +74,8 @@ class LWWResolverImpl implements LWWResolver {
   }
 
   @override
-  int clampTimestamp(int timestampMs) {
-    final now = DateTime.now().millisecondsSinceEpoch;
+  int clampTimestamp(int timestampMs, {int? nowMs}) {
+    final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
     final maxAllowed = now + _maxSkewMs;
     
     // Only clamp future timestamps that exceed the allowed skew

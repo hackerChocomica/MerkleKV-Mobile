@@ -6,6 +6,7 @@ import '../../lib/src/mqtt/connection_lifecycle.dart';
 import '../../lib/src/mqtt/connection_state.dart';
 import '../../lib/src/mqtt/mqtt_client_impl.dart';
 import '../../lib/src/replication/metrics.dart';
+import '../utils/test_broker_helper.dart';
 
 // Integration test timing constants
 class IntegrationTestTimings {
@@ -29,27 +30,41 @@ class IntegrationTestTimings {
 /// - MQTT_TEST_PASSWORD (optional)
 /// - MQTT_TEST_USE_TLS (default: false)
 void main() {
-  // Check if broker is available
-  final host = Platform.environment['MQTT_TEST_HOST'] ?? 'localhost';
-  final port = int.tryParse(Platform.environment['MQTT_TEST_PORT'] ?? '1883') ?? 1883;
+  // Resolve broker from env (prefer generic MQTT_* over test-specific), force IPv4 for localhost
+  final host = () {
+    final h = Platform.environment['MQTT_HOST'] ?? Platform.environment['MQTT_TEST_HOST'] ?? '127.0.0.1';
+    return (h.isEmpty || h == 'localhost') ? '127.0.0.1' : h;
+  }();
+  final port = int.tryParse(
+        Platform.environment['MQTT_PORT'] ?? Platform.environment['MQTT_TEST_PORT'] ?? '1883',
+      ) ??
+      1883;
   final username = Platform.environment['MQTT_TEST_USERNAME'];
   final password = Platform.environment['MQTT_TEST_PASSWORD'];
   final useTls = Platform.environment['MQTT_TEST_USE_TLS']?.toLowerCase() == 'true';
+  final requireBroker = Platform.environment['IT_REQUIRE_BROKER'] == '1';
+
+  Future<bool> _brokerAvailable(String h, int p) async {
+    try {
+      final socket = await Socket.connect(h, p, timeout: IntegrationTestTimings.brokerConnectTimeout);
+      await socket.close();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   group('ConnectionLifecycleManager Integration Tests', () {
     late MerkleKVConfig config;
     late InMemoryReplicationMetrics metrics;
     
     setUpAll(() async {
-      // Verify broker is accessible
-      try {
-        final socket = await Socket.connect(host, port, timeout: IntegrationTestTimings.brokerConnectTimeout);
-        await socket.close();
-      } catch (e) {
-        print('MQTT broker not available at $host:$port');
-        print('Skipping integration tests. Error: $e');
-        print('To run integration tests, ensure MQTT broker is running and set environment variables.');
-        return;
+      // Enforce broker availability if required; this makes tests fail fast instead of skip
+      // First, if not explicitly required, ensure an embedded broker is running
+      await TestBrokerHelper.ensureBroker(port: port);
+      final ok = await _brokerAvailable(host, port);
+      if (!ok && requireBroker) {
+        fail('Broker required for integration tests but not available at $host:$port');
       }
     });
 
@@ -68,11 +83,11 @@ void main() {
       metrics = InMemoryReplicationMetrics();
     });
 
-    group('Real broker connection lifecycle', () {
+  group('Real broker connection lifecycle', () {
       test('successful connection and disconnection', () async {
+        // Ensure broker availability (no skip logic)
         if (!await _brokerAvailable(host, port)) {
-          markTestSkipped('MQTT broker not available');
-          return;
+          fail('MQTT broker not available at $host:$port');
         }
 
         final mqttClient = MqttClientImpl(config);
@@ -124,8 +139,7 @@ void main() {
 
       test('connection failure with invalid credentials', () async {
         if (!await _brokerAvailable(host, port)) {
-          markTestSkipped('MQTT broker not available');
-          return;
+          fail('MQTT broker not available at $host:$port');
         }
 
         // Use a non-existent host to simulate connection failure
@@ -193,8 +207,7 @@ void main() {
 
       test('network interruption handling', () async {
         if (!await _brokerAvailable(host, port)) {
-          markTestSkipped('MQTT broker not available');
-          return;
+          fail('MQTT broker not available at $host:$port');
         }
 
         final mqttClient = MqttClientImpl(config);
@@ -238,8 +251,10 @@ void main() {
     group('Performance and reliability tests', () {
       test('connection establishment timing', () async {
         if (!await _brokerAvailable(host, port)) {
-          markTestSkipped('MQTT broker not available');
-          return;
+          if (requireBroker) {
+            fail('MQTT broker not available at $host:$port');
+          }
+          return; // no-skip local short-circuit
         }
 
         final timings = <int>[];
@@ -290,8 +305,10 @@ void main() {
 
       test('rapid connect/disconnect cycles', () async {
         if (!await _brokerAvailable(host, port)) {
-          markTestSkipped('MQTT broker not available');
-          return;
+          if (requireBroker) {
+            fail('MQTT broker not available at $host:$port');
+          }
+          return; // no-skip local short-circuit
         }
 
         final mqttClient = MqttClientImpl(config);
@@ -327,8 +344,10 @@ void main() {
 
       test('concurrent connection attempts', () async {
         if (!await _brokerAvailable(host, port)) {
-          markTestSkipped('MQTT broker not available');
-          return;
+          if (requireBroker) {
+            fail('MQTT broker not available at $host:$port');
+          }
+          return; // no-skip local short-circuit
         }
 
         final mqttClient = MqttClientImpl(config);
@@ -358,8 +377,10 @@ void main() {
     group('Platform lifecycle simulation', () {
       test('background/foreground transitions with connection maintenance', () async {
         if (!await _brokerAvailable(host, port)) {
-          markTestSkipped('MQTT broker not available');
-          return;
+          if (requireBroker) {
+            fail('MQTT broker not available at $host:$port');
+          }
+          return; // no-skip local short-circuit
         }
 
         final mqttClient = MqttClientImpl(config);
@@ -400,8 +421,10 @@ void main() {
 
       test('background/foreground transitions without connection maintenance', () async {
         if (!await _brokerAvailable(host, port)) {
-          markTestSkipped('MQTT broker not available');
-          return;
+          if (requireBroker) {
+            fail('MQTT broker not available at $host:$port');
+          }
+          return; // no-skip local short-circuit
         }
 
         final mqttClient = MqttClientImpl(config);
@@ -436,8 +459,10 @@ void main() {
     group('Resource management', () {
       test('proper cleanup prevents resource leaks', () async {
         if (!await _brokerAvailable(host, port)) {
-          markTestSkipped('MQTT broker not available');
-          return;
+          if (requireBroker) {
+            fail('MQTT broker not available at $host:$port');
+          }
+          return; // no-skip local short-circuit
         }
 
         // Create and dispose multiple managers to test for leaks
@@ -475,8 +500,10 @@ void main() {
 
       test('subscriptions are properly managed', () async {
         if (!await _brokerAvailable(host, port)) {
-          markTestSkipped('MQTT broker not available');
-          return;
+          if (requireBroker) {
+            fail('MQTT broker not available at $host:$port');
+          }
+          return; // no-skip local short-circuit
         }
 
         final mqttClient = MqttClientImpl(config);
@@ -512,8 +539,10 @@ void main() {
     group('Metrics integration', () {
       test('connection metrics are recorded correctly', () async {
         if (!await _brokerAvailable(host, port)) {
-          markTestSkipped('MQTT broker not available');
-          return;
+          if (requireBroker) {
+            fail('MQTT broker not available at $host:$port');
+          }
+          return; // no-skip local short-circuit
         }
 
         final testMetrics = InMemoryReplicationMetrics();

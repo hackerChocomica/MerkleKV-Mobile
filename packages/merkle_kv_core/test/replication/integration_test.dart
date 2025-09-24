@@ -4,6 +4,7 @@ library merkle_kv_core.integration_tests;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:math';
 import 'package:test/test.dart';
 import 'package:merkle_kv_core/merkle_kv_core.dart';
@@ -110,7 +111,11 @@ Future<void> connectOrSkip(MqttClientInterface c, {
     // Set timeout
     Timer? timeoutTimer = Timer(timeout, () {
       if (!completer.isCompleted) {
-        completer.completeError(TimeoutException('Connection timeout', timeout));
+        completer.completeError(TimeoutException(
+          'Connection timeout',
+          operation: 'connect/${name}',
+          timeoutMs: timeout.inMilliseconds,
+        ));
       }
     });
     
@@ -231,7 +236,11 @@ Future<bool> _tryConnectOnce(String host, int port, MqttTestConfig cfg, Duration
     // Set timeout
     Timer? timeoutTimer = Timer(timeout, () {
       if (!completer.isCompleted) {
-        completer.completeError(TimeoutException('Connection timeout', timeout));
+        completer.completeError(TimeoutException(
+          'Connection timeout',
+          operation: 'probeConnect',
+          timeoutMs: timeout.inMilliseconds,
+        ));
       }
     });
     
@@ -307,7 +316,11 @@ Future<void> waitForConnected(MqttClientInterface mqtt, {Duration timeout = cons
     // Set timeout
     timeoutTimer = Timer(timeout, () {
       if (!completer.isCompleted) {
-        completer.completeError(TimeoutException('Connection timeout', timeout));
+        completer.completeError(TimeoutException(
+          'Connection timeout',
+          operation: 'waitConnected',
+          timeoutMs: timeout.inMilliseconds,
+        ));
       }
     });
     
@@ -333,8 +346,9 @@ Future<void> subscribeAndProbe({
   Timer? timeoutTimer;
   
   try {
-    // Subscribe first
-    await listener.subscribe(topic, (topic, payload) {
+    // Subscribe first with single-level wildcard to catch probe subtopic
+    final subscriptionFilter = topic.endsWith('/+') || topic.endsWith('/#') ? topic : '$topic/+';
+    await listener.subscribe(subscriptionFilter, (topic, payload) {
       if (payload.contains('__probe__') && !completer.isCompleted) {
         completer.complete();
       }
@@ -343,13 +357,17 @@ Future<void> subscribeAndProbe({
     // Small delay for subscription to propagate
     await Future.delayed(const Duration(milliseconds: 100));
     
-    // Send probe message
-    await prober.publish('$topic/__probe__', '__probe__');
+  // Send probe message as retained so late subscribers still receive it
+  await prober.publish('$topic/__probe__', '__probe__', forceRetainFalse: false);
     
     // Set timeout
     timeoutTimer = Timer(timeout, () {
       if (!completer.isCompleted) {
-        completer.completeError(TimeoutException('Subscription probe timeout for topic: $topic', timeout));
+        completer.completeError(TimeoutException(
+          'Subscription probe timeout for topic: $topic',
+          operation: 'subscribeProbe',
+          timeoutMs: timeout.inMilliseconds,
+        ));
       }
     });
     
@@ -362,20 +380,36 @@ Future<void> subscribeAndProbe({
 
 /// Enhanced outbox draining with proper timeout handling
 Future<void> waitForOutboxDrained(ReplicationEventPublisherImpl publisher, {Duration timeout = const Duration(seconds: 30)}) async {
-  final deadline = DateTime.now().add(timeout);
-  
-  while (DateTime.now().isBefore(deadline)) {
-    final status = await Future.any([
-      publisher.outboxStatus.first,
-      Future.delayed(const Duration(seconds: 1)).then((_) => throw TimeoutException('Status timeout', const Duration(seconds: 1)))
-    ]);
-    
-    if (status.pendingEvents == 0) {
-      return;
-    }
-    await Future.delayed(const Duration(milliseconds: 100));
+  final completer = Completer<void>();
+  late StreamSubscription sub;
+  Timer? timer;
+
+  try {
+    sub = publisher.outboxStatus.listen((status) {
+      if (!completer.isCompleted && status.pendingEvents == 0) {
+        completer.complete();
+      }
+    });
+
+    // Kick a status emission and potential drain if needed (no-op if already empty)
+    // Schedule to avoid racing with the above subscription
+    Future.microtask(() => publisher.flushOutbox());
+
+    timer = Timer(timeout, () {
+      if (!completer.isCompleted) {
+        completer.completeError(TimeoutException(
+          'Outbox did not drain within timeout',
+          operation: 'outboxDrain',
+          timeoutMs: timeout.inMilliseconds,
+        ));
+      }
+    });
+
+    await completer.future;
+  } finally {
+    await sub.cancel();
+    timer?.cancel();
   }
-  throw TimeoutException('Outbox did not drain within timeout', timeout);
 }
 
 /// Generate unique test ID for topic prefixes and client IDs
@@ -412,10 +446,15 @@ void main() {
         
         // Subscribe to replication events with probe verification
         final eventReceived = Completer<ReplicationEvent>();
-        await listenerClient.subscribe('test/$testId/replication/events/+', (topic, payload) {
+        // Subscribe to the base replication topic (events are published here)
+        await listenerClient.subscribe('test/$testId/replication/events', (topic, payload) {
+          // Ignore probe messages published by subscribeAndProbe
+          if (topic.endsWith('/__probe__') || payload == '__probe__') {
+            return;
+          }
           try {
-            final json = jsonDecode(payload) as Map<String, dynamic>;
-            final event = ReplicationEvent.fromJson(json);
+            final bytes = base64Decode(payload);
+            final event = CborSerializer.decode(Uint8List.fromList(bytes));
             if (!eventReceived.isCompleted) {
               eventReceived.complete(event);
             }
@@ -449,7 +488,11 @@ void main() {
         // Wait for event with explicit timeout
         final receivedEvent = await eventReceived.future.timeout(
           const Duration(seconds: 15),
-          onTimeout: () => throw TimeoutException('Event not received within timeout', const Duration(seconds: 15)),
+          onTimeout: () => throw TimeoutException(
+            'Event not received within timeout',
+            operation: 'eventWait',
+            timeoutMs: const Duration(seconds: 15).inMilliseconds,
+          ),
         );
 
         // Verify event data
@@ -484,12 +527,16 @@ void main() {
         final publisher1 = await makePublisher(cfg, publisher1Client, '${testId}-1');
         final publisher2 = await makePublisher(cfg, publisher2Client, '${testId}-2');
 
-        // Subscribe to all test events
+        // Subscribe to all test events (base topic for both publishers)
         final receivedEvents = <ReplicationEvent>[];
-        await listenerClient.subscribe('test/+/replication/events/+', (topic, payload) {
+        await listenerClient.subscribe('test/+/replication/events', (topic, payload) {
+          // Ignore probe messages published by subscribeAndProbe
+          if (topic.endsWith('/__probe__') || payload == '__probe__') {
+            return;
+          }
           try {
-            final json = jsonDecode(payload) as Map<String, dynamic>;
-            final event = ReplicationEvent.fromJson(json);
+            final bytes = base64Decode(payload);
+            final event = CborSerializer.decode(Uint8List.fromList(bytes));
             receivedEvents.add(event);
           } catch (e) {
             // Ignore malformed events
@@ -545,8 +592,9 @@ void main() {
         // Verify all events received
         expect(receivedEvents.length, equals(6));
         
-        final pub1Events = receivedEvents.where((e) => e.nodeId.contains('-1')).toList();
-        final pub2Events = receivedEvents.where((e) => e.nodeId.contains('-2')).toList();
+  // Use precise suffix matching to avoid accidental matches from testId contents
+  final pub1Events = receivedEvents.where((e) => e.nodeId.endsWith('-1')).toList();
+  final pub2Events = receivedEvents.where((e) => e.nodeId.endsWith('-2')).toList();
         
         expect(pub1Events.length, equals(3));
         expect(pub2Events.length, equals(3));
@@ -604,12 +652,23 @@ void main() {
           value: 'disconnected-value',
         ));
 
-        // Verify outbox has queued events
-        final outboxStatus = await publisher.outboxStatus.first.timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => throw TimeoutException('Outbox status timeout', const Duration(seconds: 5)),
-        );
-        expect(outboxStatus.pendingEvents, greaterThan(0));
+        // Verify outbox has queued events by waiting for a status with pending>0
+        final pendingQueued = Completer<void>();
+        late StreamSubscription statusSub;
+        statusSub = publisher.outboxStatus.listen((s) {
+          if (!pendingQueued.isCompleted && s.pendingEvents > 0) {
+            pendingQueued.complete();
+          }
+        });
+        try {
+          await pendingQueued.future.timeout(const Duration(seconds: 5), onTimeout: () => throw TimeoutException(
+            'Outbox status timeout',
+            operation: 'outboxStatusAwait',
+            timeoutMs: const Duration(seconds: 5).inMilliseconds,
+          ));
+        } finally {
+          await statusSub.cancel();
+        }
 
         // Reconnect
         await connectOrSkip(publisherClient, timeout: const Duration(seconds: 15), require: true, what: 'reconnect');

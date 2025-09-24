@@ -3,9 +3,13 @@ import 'package:test/test.dart';
 import 'package:merkle_kv_core/merkle_kv_core.dart';
 
 import 'test_config.dart';
+import '../utils/test_broker_helper.dart';
 
 void main() {
   group('Basic End-to-End Operations', () {
+    setUpAll(() async {
+      await TestBrokerHelper.ensureBroker(port: IntegrationTestConfig.mosquittoPort);
+    });
     late String clientId;
     late String nodeId;
 

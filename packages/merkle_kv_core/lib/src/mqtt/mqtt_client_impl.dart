@@ -20,7 +20,10 @@ class MqttClientImpl implements MqttClientInterface {
   final StreamController<ConnectionState> _connectionStateController =
       StreamController<ConnectionState>.broadcast();
   final List<_QueuedMessage> _messageQueue = [];
-  final Map<String, void Function(String, String)> _subscriptions = {};
+  // Support multiple handlers per topic filter to avoid overwriting
+  final Map<String, List<void Function(String, String)>> _subscriptions = {};
+  StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>?
+    _updatesSubscription;
 
   ConnectionState _currentState = ConnectionState.disconnected;
   Timer? _reconnectTimer;
@@ -34,6 +37,9 @@ class MqttClientImpl implements MqttClientInterface {
   @override
   Stream<ConnectionState> get connectionState =>
       _connectionStateController.stream;
+
+  @override
+  ConnectionState get currentConnectionState => _currentState;
 
   /// Initialize the MQTT client with configuration settings.
   void _initializeClient() {
@@ -68,8 +74,7 @@ class MqttClientImpl implements MqttClientInterface {
     _client.onSubscribed = _onSubscribed;
     _client.onUnsubscribed = _onUnsubscribed;
 
-    // Message handler
-    _client.updates?.listen(_onMessageReceived);
+    // Message handler will be attached on successful connection in _onConnected.
   }
 
   /// Configure Last Will and Testament per Locked Spec §6.
@@ -263,27 +268,32 @@ class MqttClientImpl implements MqttClientInterface {
     String topic,
     void Function(String, String) handler,
   ) async {
-    _subscriptions[topic] = handler;
+    final handlers =
+        _subscriptions.putIfAbsent(topic, () => <void Function(String, String)>[]);
+    handlers.add(handler);
 
     if (_currentState == ConnectionState.connected) {
-      final subscription = _client.subscribe(topic, MqttQos.atLeastOnce);
+      // Only subscribe at broker level the first time this topic filter is added
+      if (handlers.length == 1) {
+        final subscription = _client.subscribe(topic, MqttQos.atLeastOnce);
 
-      // Log warning if broker downgrades to QoS 0
-      if (subscription?.qos == MqttQos.atMostOnce) {
-        // Use a proper logging framework in production
-        // ignore: avoid_print
-        print(
-          'Warning: Broker downgraded subscription to QoS 0 for topic: $topic',
-        );
+        // Log warning if broker downgrades to QoS 0
+        if (subscription?.qos == MqttQos.atMostOnce) {
+          // Use a proper logging framework in production
+          // ignore: avoid_print
+          print(
+            'Warning: Broker downgraded subscription to QoS 0 for topic: $topic',
+          );
+        }
       }
     }
   }
 
   @override
   Future<void> unsubscribe(String topic) async {
-    _subscriptions.remove(topic);
+    final removed = _subscriptions.remove(topic);
 
-    if (_currentState == ConnectionState.connected) {
+    if (_currentState == ConnectionState.connected && removed != null) {
       _client.unsubscribe(topic);
     }
   }
@@ -291,6 +301,8 @@ class MqttClientImpl implements MqttClientInterface {
   /// Handle successful connection.
   void _onConnected() {
     _updateConnectionState(ConnectionState.connected);
+    // Attach updates listener once connected (updates may be null before connect)
+    _updatesSubscription ??= _client.updates?.listen(_onMessageReceived);
     _reestablishSubscriptions();
     _flushMessageQueue();
   }
@@ -330,11 +342,58 @@ class MqttClientImpl implements MqttClientInterface {
         message.payload.message,
       );
 
-      final handler = _subscriptions[topic];
-      if (handler != null) {
-        handler(topic, payload);
-      }
+      // Dispatch to all handlers whose subscription filter matches this topic
+      // Supports MQTT wildcards: '+' (single level) and '#' (multi-level at end)
+      _subscriptions.forEach((filter, handlers) {
+        if (_topicMatches(filter, topic)) {
+          // Copy to avoid concurrent modification if a handler unsubscribes
+          for (final handler in List.from(handlers)) {
+            handler(topic, payload);
+          }
+        }
+      });
     }
+  }
+
+  /// Determines whether a topic filter matches a concrete topic name per MQTT rules.
+  /// - '+' matches exactly one level
+  /// - '#' matches any number of levels and must be the last level
+  bool _topicMatches(String filter, String topic) {
+    if (filter == topic) return true;
+
+    final fParts = filter.split('/');
+    final tParts = topic.split('/');
+
+    int fi = 0;
+    int ti = 0;
+
+    while (fi < fParts.length && ti < tParts.length) {
+      final f = fParts[fi];
+      if (f == '#') {
+        // '#' must be last in filter; it matches the rest of the topic
+        return fi == fParts.length - 1;
+      }
+      if (f == '+') {
+        // '+' matches exactly one level
+        fi++;
+        ti++;
+        continue;
+      }
+      if (f != tParts[ti]) {
+        return false;
+      }
+      fi++;
+      ti++;
+    }
+
+    // If filter has remaining parts
+    if (fi < fParts.length) {
+      // Only valid remaining part can be a terminal '#'
+      return fi == fParts.length - 1 && fParts[fi] == '#';
+    }
+
+    // If topic has remaining parts, filter must have ended with '#'
+    return ti == tParts.length;
   }
 
   /// Update connection state and notify listeners.
@@ -348,6 +407,7 @@ class MqttClientImpl implements MqttClientInterface {
   /// Dispose resources.
   Future<void> dispose() async {
     _reconnectTimer?.cancel();
+    await _updatesSubscription?.cancel();
     if (!_connectionStateController.isClosed) {
       await _connectionStateController.close();
     }

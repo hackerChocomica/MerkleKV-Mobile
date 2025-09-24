@@ -1,11 +1,17 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:test/test.dart';
+import '../utils/test_broker_helper.dart';
 
 /// Simple MQTT broker connectivity test using basic networking.
 /// Tests only TCP connectivity without complex MQTT protocol handshake.
 void main() {
   group('Simple MQTT Broker Tests', () {
+    setUpAll(() async {
+      // Ensure a broker is available for these connectivity tests; if a real
+      // broker is present, this is a no-op.
+      await TestBrokerHelper.ensureBroker(port: 1883);
+    });
     test('TCP connectivity to Mosquitto broker', () async {
       final mosquittoHost = 'localhost';
       final mosquittoPort = 1883;

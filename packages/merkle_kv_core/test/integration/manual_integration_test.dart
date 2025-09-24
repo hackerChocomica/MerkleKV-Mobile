@@ -2,9 +2,13 @@ import 'package:test/test.dart';
 import 'package:merkle_kv_core/merkle_kv_core.dart';
 
 import 'test_config.dart';
+import '../utils/test_broker_helper.dart';
 
 void main() {
   group('Basic Manual Integration Tests', () {
+    setUpAll(() async {
+      await TestBrokerHelper.ensureBroker(port: IntegrationTestConfig.mosquittoPort);
+    });
     test('MQTT client basic lifecycle', () async {
       final config = TestConfigurations.mosquittoBasic(
         clientId: 'manual-test-client',

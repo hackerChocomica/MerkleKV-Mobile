@@ -139,7 +139,7 @@ void main() {
         final now = DateTime.now().millisecondsSinceEpoch;
         final farFuture = now + (10 * 60 * 1000); // 10 minutes in future
         
-        final clamped = resolver.clampTimestamp(farFuture);
+        final clamped = resolver.clampTimestamp(farFuture, nowMs: now);
         final maxAllowed = now + (5 * 60 * 1000); // 5 minutes max
         
         expect(clamped, lessThanOrEqualTo(maxAllowed));
@@ -149,7 +149,7 @@ void main() {
         final now = DateTime.now().millisecondsSinceEpoch;
         final nearFuture = now + (2 * 60 * 1000); // 2 minutes in future
         
-        final clamped = resolver.clampTimestamp(nearFuture);
+        final clamped = resolver.clampTimestamp(nearFuture, nowMs: now);
         expect(clamped, nearFuture);
       });
 
@@ -157,7 +157,7 @@ void main() {
         final now = DateTime.now().millisecondsSinceEpoch;
         final past = now - (60 * 1000); // 1 minute ago
         
-        final clamped = resolver.clampTimestamp(past);
+        final clamped = resolver.clampTimestamp(past, nowMs: now);
         expect(clamped, past);
       });
     });
