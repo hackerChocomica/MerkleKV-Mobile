@@ -183,7 +183,8 @@ run_test_suite() {
     
     cd "$PROJECT_ROOT/packages/merkle_kv_core"
     
-    if dart test "$test_file" --timeout=300s --concurrency=1; then
+    # Use VM source compiler to avoid dependency on frontend_server snapshots
+    if dart test "$test_file" --platform vm --compiler source --timeout=300s --concurrency=1; then
         log_success "Test suite '$test_suite' passed"
         return 0
     else

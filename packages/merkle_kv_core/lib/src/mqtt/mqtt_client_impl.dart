@@ -7,6 +7,7 @@ import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 
 import '../config/merkle_kv_config.dart';
+import '../config/mqtt_security_config.dart';
 import 'connection_state.dart';
 import 'mqtt_client_interface.dart';
 
@@ -28,6 +29,7 @@ class MqttClientImpl implements MqttClientInterface {
   ConnectionState _currentState = ConnectionState.disconnected;
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
+  String? _lastTlsError;
 
   /// Creates an MQTT client implementation with the provided configuration.
   MqttClientImpl(this._config) {
@@ -56,11 +58,61 @@ class MqttClientImpl implements MqttClientInterface {
       throw ArgumentError('TLS must be enabled when credentials are provided');
     }
 
-    if (_config.mqttUseTls) {
+    // Apply TLS/security configuration
+    final sec = _config.mqttSecurity;
+    if (_config.mqttUseTls || (sec?.enableTLS ?? false)) {
       _client.secure = true;
       _client.port = _config.mqttPort;
-      // Validate server certificate by default (reject bad certificates)
-      _client.onBadCertificate = (Object certificate) => false;
+
+      // Configure SecurityContext if CA and/or client certs are provided
+      final context = SecurityContext.defaultContext;
+      try {
+        if (sec?.caCertPath != null && sec!.caCertPath!.isNotEmpty) {
+          context.setTrustedCertificates(sec.caCertPath!);
+        }
+        if (sec?.authMethod == AuthenticationMethod.clientCertificate) {
+          if ((sec?.clientCertPath?.isNotEmpty ?? false) &&
+              (sec?.clientKeyPath?.isNotEmpty ?? false)) {
+            context.useCertificateChain(sec!.clientCertPath!);
+            if (sec.clientKeyPassword != null) {
+              context.usePrivateKey(sec.clientKeyPath!,
+                  password: sec.clientKeyPassword);
+            } else {
+              context.usePrivateKey(sec.clientKeyPath!);
+            }
+          }
+        }
+      } catch (e) {
+        // TLS SecurityContext setup failed; classification will occur later.
+        // Intentionally avoid printing secrets to stdout in library code.
+      }
+
+      // Enforce strict certificate validation by default
+      _client.onBadCertificate = (Object certificate) {
+        // Basic expiry check for better error specificity
+        if (certificate is X509Certificate) {
+          final now = DateTime.now().toUtc();
+          final notAfter = certificate.endValidity;
+          if (notAfter.isBefore(now)) {
+            _lastTlsError = 'certificate expired';
+          }
+          // We cannot reliably parse SAN in Dart's X509Certificate;
+          // rely on platform validation for hostname/SAN. If the subject CN
+          // is clearly mismatched to the host, set a hint (best-effort).
+          final subj = certificate.subject;
+          if (subj.isNotEmpty && _config.mqttHost.isNotEmpty) {
+            final cnMatch = RegExp(r'CN=([^,]+)').firstMatch(subj);
+            if (cnMatch != null) {
+              final cn = cnMatch.group(1) ?? '';
+              if (!_hostMatchesPattern(_config.mqttHost, cn)) {
+                _lastTlsError ??= 'hostname validation failed';
+              }
+            }
+          }
+        }
+        // Reject by default; never bypass validation here.
+        return false;
+      };
     } else {
       _client.port = _config.mqttPort;
     }
@@ -162,22 +214,98 @@ class MqttClientImpl implements MqttClientInterface {
       status = await connectionCompleter.future;
 
       if (status?.state != MqttConnectionState.connected) {
+        if (_lastTlsError != null) {
+          final err = _lastTlsError!;
+          _lastTlsError = null;
+          throw Exception(err);
+        }
         throw Exception('Connection failed: ${status?.state}');
       }
     } on SocketException catch (e) {
       throw Exception('Network error: ${e.message}');
     } catch (e) {
-      if (e.toString().contains('authentication') ||
-          e.toString().contains('unauthorized')) {
+      final msg = e.toString();
+      // Map last TLS error first if set (e may be a generic handshake failure)
+      if (_lastTlsError != null) {
+        final err = _lastTlsError!;
+        _lastTlsError = null;
+        throw Exception(err);
+      }
+      if (msg.contains('authentication') || msg.contains('unauthorized')) {
         throw Exception('Authentication failed');
       }
-      if (e.toString().contains('timeout')) {
+      if (msg.contains('certificate') && msg.contains('expired')) {
+        throw Exception('certificate expired');
+      }
+      if (msg.contains('CERTIFICATE_VERIFY_FAILED') ||
+          msg.contains('CERTIFICATE_VERIFY_FAILED: certificate has expired')) {
+        throw Exception('certificate chain validation failed');
+      }
+      if (msg.contains('wrong version number') ||
+          msg.contains('protocol version') ||
+          msg.contains('TLSV1_ALERT_PROTOCOL_VERSION')) {
+        throw Exception('TLS version too old');
+      }
+      if (msg.contains('hostname') ||
+          msg.contains('Host name verification') ||
+          msg.contains('certificate verify failed: Hostname mismatch')) {
+        throw Exception('hostname validation failed');
+      }
+      if (msg.contains('SAN') || msg.contains('Subject Alternative Name')) {
+        throw Exception('SAN validation failed');
+      }
+      if (msg.contains('timeout')) {
         // Treat connection timeouts as network errors and reflect configured timeout
         throw Exception(
             'Network error: Connection timeout after ${_config.connectionTimeoutSeconds} seconds');
       }
-      throw Exception('MQTT error: ${e.toString()}');
+      throw Exception('MQTT error: $msg');
     }
+  }
+
+  // Best-effort hostname wildcard matching (supports "*.example.com").
+  bool _hostMatchesPattern(String host, String pattern) {
+    if (pattern == host) return true;
+    if (pattern.startsWith('*.')) {
+      // '*.example.com' should match 'api.example.com' and 'a.b.example.com',
+      // but not 'example.com'. Ensure suffix match at label boundary and at
+      // least one additional label before the suffix.
+      final suffix = pattern.substring(1); // '.example.com'
+      if (!host.endsWith(suffix)) return false;
+
+      final hostSegments = host.split('.');
+      final patternTail = pattern.substring(2); // 'example.com'
+      final patternSegments = patternTail.split('.');
+      // Host must have at least one segment before the suffix
+      return hostSegments.length >= patternSegments.length + 1;
+    }
+    return false;
+  }
+
+  /// Classify low-level TLS/handshake errors into stable, user-facing messages.
+  static String classifyTlsError(String raw) {
+    final msg = raw;
+    if (msg.contains('certificate') && msg.contains('expired')) {
+      return 'certificate expired';
+    }
+    if (msg.contains('CERTIFICATE_VERIFY_FAILED')) {
+      return 'certificate chain validation failed';
+    }
+    if (msg.contains('wrong version number') ||
+        msg.contains('protocol version') ||
+        msg.contains('TLSV1_ALERT_PROTOCOL_VERSION') ||
+        msg.contains('unsupported protocol')) {
+      return 'TLS version too old';
+    }
+    if (msg.contains('Hostname mismatch') ||
+        msg.contains('Host name verification') ||
+        msg.contains('certificate verify failed: Hostname mismatch')) {
+      return 'hostname validation failed';
+    }
+    if (msg.contains('SAN') || msg.contains('Subject Alternative Name')) {
+      return 'SAN validation failed';
+    }
+    return 'MQTT error: $msg';
   }
 
   /// Schedule reconnection with exponential backoff and jitter.

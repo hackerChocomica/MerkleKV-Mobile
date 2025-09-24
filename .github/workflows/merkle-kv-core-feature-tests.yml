@@ -124,7 +124,14 @@ jobs:
       - name: Install OS test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq curl netcat-openbsd mosquitto-clients
+          sudo apt-get install -y jq curl netcat-openbsd mosquitto-clients openssl
+
+      - name: Generate TLS test certificates
+        run: |
+          set -euxo pipefail
+          chmod +x test/integration/generate_certs.sh test/integration/convert_certs.sh
+          ./test/integration/generate_certs.sh
+          ./test/integration/convert_certs.sh
 
       - name: Start broker test environment (Mosquitto, HiveMQ, Toxiproxy)
         run: |
@@ -137,6 +144,14 @@ jobs:
             if nc -z 127.0.0.1 1883; then echo "Mosquitto ready"; break; fi; sleep 2; done
           if ! nc -z 127.0.0.1 1883; then
             echo "Mosquitto not ready after wait";
+            docker-compose -f "$DOCKER_COMPOSE_FILE" logs --no-color mosquitto-test || true;
+            exit 1;
+          fi
+          # Wait for Mosquitto TLS (8883)
+          for i in {1..30}; do
+            if nc -z 127.0.0.1 8883; then echo "Mosquitto (TLS) ready"; break; fi; sleep 2; done
+          if ! nc -z 127.0.0.1 8883; then
+            echo "Mosquitto TLS (8883) not ready after wait";
             docker-compose -f "$DOCKER_COMPOSE_FILE" logs --no-color mosquitto-test || true;
             exit 1;
           fi
@@ -257,6 +272,12 @@ jobs:
             sleep 2
             dart test -r expanded --platform vm --compiler source --timeout "$TIMEOUT" -j "$JOBS" "${{ steps.suite.outputs.paths }}"
           fi
+
+      - name: Run TLS Security Integration Suite (real broker TLS)
+        run: |
+          set -euxo pipefail
+          chmod +x scripts/run_integration_tests.sh
+          ./scripts/run_integration_tests.sh -s security
 
       - name: Generate coverage (LCOV)
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.enable_coverage == 'true' }}

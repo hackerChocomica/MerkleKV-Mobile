@@ -8,6 +8,7 @@ services:
       - "8883:8883"    # MQTT over TLS
     volumes:
       - ./test/integration/config/mosquitto:/mosquitto/config:ro
+      - ./test/integration/certs:/mosquitto/certs:ro
       - mosquitto_test_data:/mosquitto/data
       - mosquitto_test_log:/mosquitto/log
     environment:

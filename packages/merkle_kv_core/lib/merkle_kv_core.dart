@@ -14,6 +14,7 @@ export 'src/api/config_builder.dart';
 export 'src/config/merkle_kv_config.dart';
 export 'src/config/invalid_config_exception.dart';
 export 'src/config/default_config.dart';
+export 'src/config/mqtt_security_config.dart';
 
 // MQTT Client
 export 'src/mqtt/connection_state.dart';

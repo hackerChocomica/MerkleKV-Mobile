@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 import 'package:merkle_kv_core/src/config/merkle_kv_config.dart';
+import 'package:merkle_kv_core/src/config/mqtt_security_config.dart';
 import 'package:merkle_kv_core/src/config/invalid_config_exception.dart';
 import 'package:merkle_kv_core/src/config/resource_limits.dart';
 
@@ -759,6 +760,26 @@ void main() {
 
         expect(config.mqttUseTls, isTrue);
         expect(config.mqttPort, equals(8883));
+      });
+
+      test('mqttSecurity serializes when present', () {
+        final config = MerkleKVConfig(
+          mqttHost: 'example.com',
+          clientId: 'test-client',
+          nodeId: 'test-node',
+          mqttUseTls: true,
+          mqttSecurity: const MqttSecurityConfig(enableTLS: true),
+        );
+        final json = config.toJson();
+        expect(json['mqttSecurity'], isNotNull);
+        final decoded = MerkleKVConfig.fromJson(
+          {
+            ...json,
+            'username': null,
+            'password': null,
+          },
+        );
+        expect(decoded.mqttSecurity?.enableTLS, isTrue);
       });
     });
   });

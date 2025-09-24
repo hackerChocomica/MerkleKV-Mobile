@@ -228,19 +228,40 @@ final config = MerkleKVConfig(
 );
 ```
 
-### Anti-Entropy Sync
 ## 🔐 Security & Production Setup
 
 ### MQTT TLS Configuration
+
+Option A — Simple (username/password over TLS):
 ```dart
 final secureConfig = MerkleKVConfig(
   mqttHost: 'secure-broker.example.com',
-  mqttPort: 8883,  // TLS port
+  mqttPort: 8883, // TLS port
+  mqttUseTls: true,
   clientId: 'production-client-1',
   nodeId: 'prod-device-uuid-123',
   username: 'mqtt-user',
   password: 'secure-password',
-  // TLS automatically enabled when credentials present
+);
+```
+
+Option B — Advanced (explicit TLS and auth via MqttSecurityConfig):
+```dart
+final secureConfig = MerkleKVConfig(
+  mqttHost: 'secure-broker.example.com',
+  mqttPort: 8883,
+  clientId: 'production-client-1',
+  nodeId: 'prod-device-uuid-123',
+  mqttSecurity: MqttSecurityConfig(
+    enableTLS: true,
+    minTLSVersion: TLSVersion.v1_2,
+    enforceHostnameValidation: true,
+    enforceSANValidation: true,
+    authMethod: AuthenticationMethod.usernamePassword,
+    // Provide secrets from secure storage in production
+    username: 'mqtt-user',
+    password: 'secure-password',
+  ),
 );
 ```
 
@@ -332,6 +353,7 @@ print('Storage size: ${storageMetrics.totalSizeBytes}');
 | [Architecture Guide](docs/architecture.md) | Deep technical dive | Advanced |
 | [API Reference](packages/merkle_kv_core/README.md) | Complete API docs | Reference |
 | [Security Guide](SECURITY.md) | Production security | Advanced |
+| [MQTT Security Config](packages/merkle_kv_core/README_MQTT_SECURITY.md) | Configure TLS and auth | Reference |
 | [CBOR Replication](docs/replication/cbor.md) | Serialization details | Advanced |
 | [Contributing Guide](CONTRIBUTING.md) | Development setup | Contributor |
 
