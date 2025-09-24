@@ -4,6 +4,7 @@ library merkle_kv_core.integration_tests;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:math';
 import 'package:test/test.dart';
 import 'package:merkle_kv_core/merkle_kv_core.dart';
@@ -379,28 +380,36 @@ Future<void> subscribeAndProbe({
 
 /// Enhanced outbox draining with proper timeout handling
 Future<void> waitForOutboxDrained(ReplicationEventPublisherImpl publisher, {Duration timeout = const Duration(seconds: 30)}) async {
-  final deadline = DateTime.now().add(timeout);
-  
-  while (DateTime.now().isBefore(deadline)) {
-    final status = await Future.any([
-  publisher.outboxStatus.first,
-  Future.delayed(const Duration(seconds: 1)).then((_) => throw TimeoutException(
-    'Status timeout',
-    operation: 'outboxStatusPoll',
-    timeoutMs: const Duration(seconds: 1).inMilliseconds,
-      ))
-    ]);
-    
-    if (status.pendingEvents == 0) {
-      return;
-    }
-    await Future.delayed(const Duration(milliseconds: 100));
+  final completer = Completer<void>();
+  late StreamSubscription sub;
+  Timer? timer;
+
+  try {
+    sub = publisher.outboxStatus.listen((status) {
+      if (!completer.isCompleted && status.pendingEvents == 0) {
+        completer.complete();
+      }
+    });
+
+    // Kick a status emission if needed
+    // Wait a moment for any pending emit
+    await Future.delayed(const Duration(milliseconds: 10));
+
+    timer = Timer(timeout, () {
+      if (!completer.isCompleted) {
+        completer.completeError(TimeoutException(
+          'Outbox did not drain within timeout',
+          operation: 'outboxDrain',
+          timeoutMs: timeout.inMilliseconds,
+        ));
+      }
+    });
+
+    await completer.future;
+  } finally {
+    await sub.cancel();
+    timer?.cancel();
   }
-  throw TimeoutException(
-    'Outbox did not drain within timeout',
-    operation: 'outboxDrain',
-    timeoutMs: timeout.inMilliseconds,
-  );
 }
 
 /// Generate unique test ID for topic prefixes and client IDs
@@ -444,8 +453,8 @@ void main() {
             return;
           }
           try {
-            final json = jsonDecode(payload) as Map<String, dynamic>;
-            final event = ReplicationEvent.fromJson(json);
+            final bytes = base64Decode(payload);
+            final event = CborSerializer.decode(Uint8List.fromList(bytes));
             if (!eventReceived.isCompleted) {
               eventReceived.complete(event);
             }
@@ -526,8 +535,8 @@ void main() {
             return;
           }
           try {
-            final json = jsonDecode(payload) as Map<String, dynamic>;
-            final event = ReplicationEvent.fromJson(json);
+            final bytes = base64Decode(payload);
+            final event = CborSerializer.decode(Uint8List.fromList(bytes));
             receivedEvents.add(event);
           } catch (e) {
             // Ignore malformed events
@@ -642,16 +651,23 @@ void main() {
           value: 'disconnected-value',
         ));
 
-        // Verify outbox has queued events
-        final outboxStatus = await publisher.outboxStatus.first.timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => throw TimeoutException(
+        // Verify outbox has queued events by waiting for a status with pending>0
+        final pendingQueued = Completer<void>();
+        late StreamSubscription statusSub;
+        statusSub = publisher.outboxStatus.listen((s) {
+          if (!pendingQueued.isCompleted && s.pendingEvents > 0) {
+            pendingQueued.complete();
+          }
+        });
+        try {
+          await pendingQueued.future.timeout(const Duration(seconds: 5), onTimeout: () => throw TimeoutException(
             'Outbox status timeout',
             operation: 'outboxStatusAwait',
             timeoutMs: const Duration(seconds: 5).inMilliseconds,
-          ),
-        );
-        expect(outboxStatus.pendingEvents, greaterThan(0));
+          ));
+        } finally {
+          await statusSub.cancel();
+        }
 
         // Reconnect
         await connectOrSkip(publisherClient, timeout: const Duration(seconds: 15), require: true, what: 'reconnect');
