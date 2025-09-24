@@ -172,7 +172,9 @@ class MqttClientImpl implements MqttClientInterface {
         throw Exception('Authentication failed');
       }
       if (e.toString().contains('timeout')) {
-        throw Exception('Connection timeout after 20 seconds');
+        // Treat connection timeouts as network errors and reflect configured timeout
+        throw Exception(
+            'Network error: Connection timeout after ${_config.connectionTimeoutSeconds} seconds');
       }
       throw Exception('MQTT error: ${e.toString()}');
     }

@@ -2,7 +2,10 @@ import 'dart:io';
 
 import 'invalid_config_exception.dart';
 import '../mqtt/topic_validator.dart';
+
 import '../utils/battery_awareness.dart';
+import 'resource_limits.dart';
+
 
 /// Centralized, immutable configuration for MerkleKV Mobile client.
 ///
@@ -74,6 +77,9 @@ class MerkleKVConfig {
   ///
   /// Required when [persistenceEnabled] is true.
   final String? storagePath;
+  
+  /// Optional resource limits provided by the application (advisory, no-op).
+  final ResourceLimits? resourceLimits;
 
   /// Configuration for battery-aware optimizations.
   final BatteryAwarenessConfig batteryConfig;
@@ -99,6 +105,7 @@ class MerkleKVConfig {
     required this.persistenceEnabled,
     required this.storagePath,
     required this.batteryConfig,
+    required this.resourceLimits,
   });
 
   /// Creates a new MerkleKVConfig with validation and default values.
@@ -122,6 +129,7 @@ class MerkleKVConfig {
     bool persistenceEnabled = false,
     String? storagePath,
     BatteryAwarenessConfig? batteryConfig,
+    ResourceLimits? resourceLimits,
   }) {
     return MerkleKVConfig._validated(
       mqttHost: mqttHost,
@@ -140,6 +148,7 @@ class MerkleKVConfig {
       persistenceEnabled: persistenceEnabled,
       storagePath: storagePath,
       batteryConfig: batteryConfig ?? const BatteryAwarenessConfig(),
+      resourceLimits: resourceLimits,
     );
   }
 
@@ -185,6 +194,7 @@ class MerkleKVConfig {
     bool persistenceEnabled = false,
     String? storagePath,
     BatteryAwarenessConfig? batteryConfig,
+    ResourceLimits? resourceLimits,
   }) {
     // Auto-supply temp storage path if persistence enabled but no path provided
     String? resolvedStoragePath = storagePath;
@@ -211,6 +221,7 @@ class MerkleKVConfig {
       persistenceEnabled: persistenceEnabled,
       storagePath: resolvedStoragePath,
       batteryConfig: batteryConfig ?? const BatteryAwarenessConfig(),
+      resourceLimits: resourceLimits,
     );
   }
 
@@ -232,6 +243,7 @@ class MerkleKVConfig {
     required bool persistenceEnabled,
     String? storagePath,
     required BatteryAwarenessConfig batteryConfig,
+    ResourceLimits? resourceLimits,
   }) {
     // Validate mqttHost
     if (mqttHost.trim().isEmpty) {
@@ -317,6 +329,18 @@ class MerkleKVConfig {
       );
     }
 
+    // Validate resource limits if provided
+    if (resourceLimits != null) {
+      try {
+        resourceLimits.validate();
+      } catch (e) {
+        throw InvalidConfigException(
+          'Invalid resource limits: $e',
+          'resourceLimits',
+        );
+      }
+    }
+
     // Normalize and validate topic prefix using enhanced validation
     String normalizedPrefix = TopicValidator.normalizePrefix(topicPrefix);
     try {
@@ -353,6 +377,7 @@ class MerkleKVConfig {
       persistenceEnabled: persistenceEnabled,
       storagePath: storagePath,
       batteryConfig: batteryConfig,
+      resourceLimits: resourceLimits,
     );
   }
 
@@ -387,6 +412,7 @@ class MerkleKVConfig {
     bool? persistenceEnabled,
     String? storagePath,
     BatteryAwarenessConfig? batteryConfig,
+    ResourceLimits? resourceLimits,
   }) {
     // If TLS setting changes but port is not specified, infer the port
     final newTlsSetting = mqttUseTls ?? this.mqttUseTls;
@@ -414,6 +440,7 @@ class MerkleKVConfig {
       persistenceEnabled: persistenceEnabled ?? this.persistenceEnabled,
       storagePath: storagePath ?? this.storagePath,
       batteryConfig: batteryConfig ?? this.batteryConfig,
+      resourceLimits: resourceLimits ?? this.resourceLimits,
     );
   }
 
@@ -443,6 +470,7 @@ class MerkleKVConfig {
         'enableOperationThrottling': batteryConfig.enableOperationThrottling,
         'reduceBackgroundActivity': batteryConfig.reduceBackgroundActivity,
       },
+      'resourceLimits': resourceLimits?.toJson(),
     };
   }
 
@@ -483,6 +511,11 @@ class MerkleKVConfig {
       persistenceEnabled: json['persistenceEnabled'] as bool? ?? false,
       storagePath: json['storagePath'] as String?,
       batteryConfig: batteryConfig,
+      resourceLimits: json['resourceLimits'] == null
+          ? null
+          : ResourceLimits.fromJson(
+              (json['resourceLimits'] as Map).cast<String, dynamic>(),
+            ),
     );
   }
 
@@ -513,6 +546,7 @@ class MerkleKVConfig {
           'adaptiveSyncInterval: ${batteryConfig.adaptiveSyncInterval}, '
           'enableOperationThrottling: ${batteryConfig.enableOperationThrottling}, '
           'reduceBackgroundActivity: ${batteryConfig.reduceBackgroundActivity})'
+        'resourceLimits: ${resourceLimits?.toString()}'
         '}';
   }
 }
