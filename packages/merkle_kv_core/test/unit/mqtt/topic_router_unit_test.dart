@@ -5,6 +5,7 @@ import '../../../lib/src/mqtt/topic_validator.dart';
 import '../../../lib/src/mqtt/connection_state.dart';
 import '../../../lib/src/config/merkle_kv_config.dart';
 import '../../../lib/src/config/invalid_config_exception.dart';
+import '../../../lib/src/commands/error_classifier.dart';
 import '../../utils/generators.dart';
 import '../../utils/mock_helpers.dart';
 
@@ -104,6 +105,49 @@ void main() {
           () => router.publishCommand('target', 'payload'),
           returnsNormally,
         );
+      });
+    });
+
+    group('Client-side topic authorization', () {
+      test('denies cross-client publish under canonical prefix', () async {
+        final canonicalCfg = MerkleKVConfig.create(
+          mqttHost: 'localhost',
+          clientId: 'device-1',
+          nodeId: 'node-1',
+          topicPrefix: 'merkle_kv',
+        );
+        final client = MockMqttClient();
+        final canonicalRouter = TopicRouterImpl(canonicalCfg, client);
+
+        // Cross-client should throw ApiException (code 300)
+        expect(
+          () => canonicalRouter.publishCommand('other-device', 'cmd'),
+          throwsA(isA<ApiException>().having((e) => e.code, 'code', 300)),
+        );
+
+        // Self-target is allowed
+        await canonicalRouter.publishCommand('device-1', 'cmd');
+        expect(client.publishCalls, hasLength(1));
+
+        await canonicalRouter.dispose();
+        await client.dispose();
+      });
+
+      test('does not restrict non-canonical prefixes', () async {
+        final nonCanonicalCfg = MerkleKVConfig.create(
+          mqttHost: 'localhost',
+          clientId: 'device-1',
+          nodeId: 'node-1',
+          topicPrefix: 'test/prefix',
+        );
+        final client = MockMqttClient();
+        final nonCanonicalRouter = TopicRouterImpl(nonCanonicalCfg, client);
+
+        await nonCanonicalRouter.publishCommand('other-device', 'cmd');
+        expect(client.publishCalls, hasLength(1));
+
+        await nonCanonicalRouter.dispose();
+        await client.dispose();
       });
     });
   });

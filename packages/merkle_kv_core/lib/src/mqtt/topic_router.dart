@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import '../config/merkle_kv_config.dart';
+import '../commands/error_classifier.dart';
 import 'connection_state.dart';
 import 'mqtt_client_interface.dart';
 import 'topic_scheme.dart';
@@ -49,6 +50,8 @@ abstract class TopicRouter {
 class TopicRouterImpl implements TopicRouter {
   final MqttClientInterface _mqttClient;
   final TopicScheme _topicScheme;
+  // Enforce client-side authz for canonical scheme (prefix 'merkle_kv')
+  final bool _enforceAuthz;
 
   // Active subscription handlers
   void Function(String, String)? _commandHandler;
@@ -59,7 +62,8 @@ class TopicRouterImpl implements TopicRouter {
 
   /// Creates a TopicRouter with the provided configuration and MQTT client.
   TopicRouterImpl(MerkleKVConfig config, this._mqttClient)
-    : _topicScheme = TopicScheme.create(config.topicPrefix, config.clientId) {
+    : _topicScheme = TopicScheme.create(config.topicPrefix, config.clientId),
+      _enforceAuthz = TopicValidator.normalizePrefix(config.topicPrefix) == 'merkle_kv' {
     _initializeConnectionMonitoring();
   }
 
@@ -134,6 +138,9 @@ class TopicRouterImpl implements TopicRouter {
 
   @override
   Future<void> publishCommand(String targetClientId, String payload) async {
+    // Client-side authorization: in canonical scheme, prevent cross-client publishes
+    _assertCanPublishToTarget(targetClientId);
+
     // Use TopicValidator for enhanced validation and consistent topic building
     final targetTopic = TopicValidator.buildCommandTopic(
       _topicScheme.prefix, 
@@ -151,6 +158,27 @@ class TopicRouterImpl implements TopicRouter {
       'Published command to $targetTopic (${payload.length} bytes)',
       name: 'TopicRouter',
       level: 800, // INFO
+    );
+  }
+
+  /// Asserts the caller is authorized to publish to the given target client.
+  ///
+  /// Policy (minimal client-side enforcement):
+  /// - When using canonical prefix 'merkle_kv', non-controller clients are
+  ///   only allowed to publish to their own command topic. Cross-client
+  ///   publishes must be performed by privileged identities (enforced by
+  ///   broker ACLs). We reflect that policy locally to fail fast.
+  /// - For non-canonical prefixes (tests, custom setups), no client-side
+  ///   restriction is applied.
+  void _assertCanPublishToTarget(String targetClientId) {
+    if (!_enforceAuthz) return;
+    // Allow self-targeting publishes (loopback/testing scenarios)
+    if (targetClientId == _topicScheme.clientId) return;
+
+    // Deny cross-client command publishes under canonical scheme
+    throw ApiException(
+      300,
+      'Not authorized to publish commands to other clients under canonical topic scheme',
     );
   }
 
