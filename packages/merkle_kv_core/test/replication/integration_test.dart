@@ -438,6 +438,10 @@ void main() {
         // Subscribe to replication events with probe verification
         final eventReceived = Completer<ReplicationEvent>();
         await listenerClient.subscribe('test/$testId/replication/events/+', (topic, payload) {
+          // Ignore probe messages published by subscribeAndProbe
+          if (topic.endsWith('/__probe__') || payload == '__probe__') {
+            return;
+          }
           try {
             final json = jsonDecode(payload) as Map<String, dynamic>;
             final event = ReplicationEvent.fromJson(json);
@@ -516,6 +520,10 @@ void main() {
         // Subscribe to all test events
         final receivedEvents = <ReplicationEvent>[];
         await listenerClient.subscribe('test/+/replication/events/+', (topic, payload) {
+          // Ignore probe messages published by subscribeAndProbe
+          if (topic.endsWith('/__probe__') || payload == '__probe__') {
+            return;
+          }
           try {
             final json = jsonDecode(payload) as Map<String, dynamic>;
             final event = ReplicationEvent.fromJson(json);
