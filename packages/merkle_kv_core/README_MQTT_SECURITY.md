@@ -2,6 +2,8 @@
 
 This short guide shows how to configure TLS and authentication for the MerkleKV MQTT client using the new `MqttSecurityConfig`.
 
+See also: MQTT Security Appendix for canonical topic-level authorization guidance (`README_MQTT_SECURITY_APPENDIX.md`).
+
 ## Simple TLS with username/password
 
 ```dart
