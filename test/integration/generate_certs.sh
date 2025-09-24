@@ -81,8 +81,15 @@ openssl x509 -req -in client2.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out 
 rm -f *.csr *.ext *.srl
 
 # Set appropriate permissions
+# Certificates can be world-readable.
 chmod 644 *.crt
-chmod 600 *.key
+
+# Private keys should be restrictive by default, but the Mosquitto container
+# runs as a non-root user and the certs are mounted read-only. To allow the
+# broker to read the TLS server private key, make just server.key world-readable
+# for tests. Keep CA and client keys at 600.
+chmod 600 ca.key client.key client2.key || true
+chmod 644 server.key
 
 echo "Certificates generated successfully:"
 echo "  CA Certificate: ca.crt"
