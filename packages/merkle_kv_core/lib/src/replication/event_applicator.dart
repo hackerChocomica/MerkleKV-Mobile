@@ -531,7 +531,7 @@ class ReplicationEventApplicatorImpl implements ReplicationEventApplicator {
   /// Clamps timestamp to prevent excessive future skew
   ReplicationEvent _clampTimestamp(ReplicationEvent event) {
     final originalTimestamp = event.timestampMs;
-    final clampedTimestamp = _lwwResolver.clampTimestamp(originalTimestamp);
+  final clampedTimestamp = _lwwResolver.clampTimestamp(originalTimestamp);
     
     // Track clamping metrics
     if (clampedTimestamp != originalTimestamp) {
