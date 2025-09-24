@@ -437,7 +437,8 @@ void main() {
         
         // Subscribe to replication events with probe verification
         final eventReceived = Completer<ReplicationEvent>();
-        await listenerClient.subscribe('test/$testId/replication/events/+', (topic, payload) {
+        // Subscribe to the base replication topic (events are published here)
+        await listenerClient.subscribe('test/$testId/replication/events', (topic, payload) {
           // Ignore probe messages published by subscribeAndProbe
           if (topic.endsWith('/__probe__') || payload == '__probe__') {
             return;
@@ -517,9 +518,9 @@ void main() {
         final publisher1 = await makePublisher(cfg, publisher1Client, '${testId}-1');
         final publisher2 = await makePublisher(cfg, publisher2Client, '${testId}-2');
 
-        // Subscribe to all test events
+        // Subscribe to all test events (base topic for both publishers)
         final receivedEvents = <ReplicationEvent>[];
-        await listenerClient.subscribe('test/+/replication/events/+', (topic, payload) {
+        await listenerClient.subscribe('test/+/replication/events', (topic, payload) {
           // Ignore probe messages published by subscribeAndProbe
           if (topic.endsWith('/__probe__') || payload == '__probe__') {
             return;
