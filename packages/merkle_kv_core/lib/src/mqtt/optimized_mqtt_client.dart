@@ -36,6 +36,9 @@ class OptimizedMqttClient implements MqttClientInterface {
   Stream<ConnectionState> get connectionState => _client.connectionState;
 
   @override
+  ConnectionState get currentConnectionState => _client.currentConnectionState;
+
+  @override
   Future<void> connect() => _client.connect();
 
   @override

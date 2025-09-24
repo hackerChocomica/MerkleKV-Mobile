@@ -38,6 +38,9 @@ class MqttClientImpl implements MqttClientInterface {
   Stream<ConnectionState> get connectionState =>
       _connectionStateController.stream;
 
+  @override
+  ConnectionState get currentConnectionState => _currentState;
+
   /// Initialize the MQTT client with configuration settings.
   void _initializeClient() {
     _client = MqttServerClient(_config.mqttHost, _config.clientId);

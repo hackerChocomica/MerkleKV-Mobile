@@ -51,6 +51,9 @@ class MockMqttClient implements MqttClientInterface {
     return _stateController!.stream;
   }
 
+  @override
+  ConnectionState get currentConnectionState => _currentState;
+
   ConnectionState get currentState => _currentState;
   List<String> get subscriptions => List.unmodifiable(_subscriptions);
   List<String> get publishCalls => List.unmodifiable(_publishCalls);

@@ -11,6 +11,12 @@ abstract class MqttClientInterface {
   /// Emits current state and all subsequent state transitions.
   Stream<ConnectionState> get connectionState;
 
+  /// Current connection state snapshot.
+  ///
+  /// Should reflect the latest known connection state immediately without
+  /// waiting for a new event on [connectionState].
+  ConnectionState get currentConnectionState;
+
   /// Connect to the MQTT broker.
   ///
   /// Implements exponential backoff reconnection strategy with jitter.

@@ -322,8 +322,8 @@ class ReplicationEventPublisherImpl implements ReplicationEventPublisher {
 
   /// Checks if MQTT client is currently online
   Future<bool> _isOnline() async {
-    // Simple check - in a real implementation, you might want to cache this
-    final currentState = await _mqttClient.connectionState.first;
+    // Use instantaneous snapshot to avoid waiting for stream events
+    final currentState = _mqttClient.currentConnectionState;
     return currentState == ConnectionState.connected;
   }
 

@@ -19,6 +19,9 @@ class MockMqttClient implements MqttClientInterface {
   Stream<ConnectionState> get connectionState =>
       _connectionStateController.stream;
 
+  @override
+  ConnectionState get currentConnectionState => ConnectionState.connected;
+
   /// Simulate connection state change
   void simulateConnectionState(ConnectionState state) {
     _connectionStateController.add(state);
