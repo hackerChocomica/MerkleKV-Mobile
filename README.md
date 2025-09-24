@@ -353,6 +353,7 @@ print('Storage size: ${storageMetrics.totalSizeBytes}');
 | [Architecture Guide](docs/architecture.md) | Deep technical dive | Advanced |
 | [API Reference](packages/merkle_kv_core/README.md) | Complete API docs | Reference |
 | [Security Guide](SECURITY.md) | Production security | Advanced |
+| [MQTT Security Config](packages/merkle_kv_core/README_MQTT_SECURITY.md) | Configure TLS and auth | Reference |
 | [CBOR Replication](docs/replication/cbor.md) | Serialization details | Advanced |
 | [Contributing Guide](CONTRIBUTING.md) | Development setup | Contributor |
 
