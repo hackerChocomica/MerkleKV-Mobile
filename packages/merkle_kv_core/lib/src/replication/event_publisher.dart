@@ -433,17 +433,33 @@ class SequenceManager {
       
       // Handle both single JSON and JSONL (append mode) formats
       if (content.contains('\n')) {
-        // JSONL format - take the last valid line
-        final lines = content.trim().split('\n').where((line) => line.isNotEmpty);
-        if (lines.isNotEmpty) {
-          final lastLine = lines.last;
-          final data = jsonDecode(lastLine) as Map<String, dynamic>;
-          _currentSeq = data['seq'] as int;
+        // JSONL format - scan backwards to find the last decodable line
+        final rawLines = content.split('\n');
+        for (var i = rawLines.length - 1; i >= 0; i--) {
+          final line = rawLines[i].trim();
+          if (line.isEmpty) continue;
+          try {
+            final data = jsonDecode(line) as Map<String, dynamic>;
+            final seq = data['seq'];
+            if (seq is int) {
+              _currentSeq = seq;
+              break;
+            }
+          } catch (_) {
+            // Ignore this line and continue scanning earlier lines
+          }
         }
+        // If no valid line was found, _currentSeq remains at default (0)
       } else {
         // Single JSON format
-        final data = jsonDecode(content.trim()) as Map<String, dynamic>;
-        _currentSeq = data['seq'] as int;
+        final trimmed = content.trim();
+        if (trimmed.isNotEmpty) {
+          final data = jsonDecode(trimmed) as Map<String, dynamic>;
+          final seq = data['seq'];
+          if (seq is int) {
+            _currentSeq = seq;
+          }
+        }
       }
     } catch (e) {
       // If recovery fails, start from 0 - this is safe as sequence

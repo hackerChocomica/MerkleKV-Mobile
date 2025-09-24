@@ -481,6 +481,30 @@ void main() {
       final seq = sequenceManager.getNextSequence();
       expect(seq, equals(1));
     });
+
+    test('should recover from truncated last JSONL line by using last valid entry', () async {
+      final seqFile = File('${config.storagePath}.seq');
+      await seqFile.parent.create(recursive: true);
+
+      // Prepare valid JSONL lines followed by a truncated/invalid line
+      final lines = [
+        '{"seq":1,"updated":"2025-09-24T00:00:00.000Z"}\n',
+        '{"seq":2,"updated":"2025-09-24T00:00:01.000Z"}\n',
+        '{"seq":3,"updated":"2025-09-24T00:00:02.000Z"}\n',
+        // Truncated (no closing quotes/brace and no newline)
+        '{"seq":4,"updated":"2025-09-24T00:00:03',
+      ];
+      await seqFile.writeAsString(lines.join());
+
+      await sequenceManager.initialize();
+
+      // Should recover the last valid full JSON line (seq=3)
+      expect(sequenceManager.currentSequence, equals(3));
+
+      // Next sequence should continue strictly from recovered value
+      final next = sequenceManager.getNextSequence();
+      expect(next, equals(4));
+    });
   });
 
   group('OutboxQueue', () {
