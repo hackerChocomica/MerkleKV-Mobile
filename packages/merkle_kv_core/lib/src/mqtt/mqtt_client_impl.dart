@@ -83,8 +83,8 @@ class MqttClientImpl implements MqttClientInterface {
           }
         }
       } catch (e) {
-        // ignore: avoid_print
-        print('TLS SecurityContext setup failed: $e');
+        // TLS SecurityContext setup failed; classification will occur later.
+        // Intentionally avoid printing secrets to stdout in library code.
       }
 
       // Enforce strict certificate validation by default
@@ -100,7 +100,7 @@ class MqttClientImpl implements MqttClientInterface {
           // rely on platform validation for hostname/SAN. If the subject CN
           // is clearly mismatched to the host, set a hint (best-effort).
           final subj = certificate.subject;
-          if (subj.isNotEmpty && !_config.mqttHost.isEmpty) {
+          if (subj.isNotEmpty && _config.mqttHost.isNotEmpty) {
             final cnMatch = RegExp(r'CN=([^,]+)').firstMatch(subj);
             if (cnMatch != null) {
               final cn = cnMatch.group(1) ?? '';
@@ -267,8 +267,17 @@ class MqttClientImpl implements MqttClientInterface {
   bool _hostMatchesPattern(String host, String pattern) {
     if (pattern == host) return true;
     if (pattern.startsWith('*.')) {
-      final suffix = pattern.substring(1); // remove leading '*'
-      return host.endsWith(suffix) && host.split('.').length > pattern.split('.').length;
+      // '*.example.com' should match 'api.example.com' and 'a.b.example.com',
+      // but not 'example.com'. Ensure suffix match at label boundary and at
+      // least one additional label before the suffix.
+      final suffix = pattern.substring(1); // '.example.com'
+      if (!host.endsWith(suffix)) return false;
+
+      final hostSegments = host.split('.');
+      final patternTail = pattern.substring(2); // 'example.com'
+      final patternSegments = patternTail.split('.');
+      // Host must have at least one segment before the suffix
+      return hostSegments.length >= patternSegments.length + 1;
     }
     return false;
   }
