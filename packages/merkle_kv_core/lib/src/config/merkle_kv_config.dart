@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'invalid_config_exception.dart';
 import '../mqtt/topic_validator.dart';
+
+import '../utils/battery_awareness.dart';
 import 'resource_limits.dart';
 import 'mqtt_security_config.dart';
 
@@ -79,6 +81,9 @@ class MerkleKVConfig {
   /// Optional resource limits provided by the application (advisory, no-op).
   final ResourceLimits? resourceLimits;
 
+  /// Configuration for battery-aware optimizations.
+  final BatteryAwarenessConfig batteryConfig;
+
   /// Optional MQTT security configuration (TLS and authentication details).
   final MqttSecurityConfig? mqttSecurity;
 
@@ -102,6 +107,7 @@ class MerkleKVConfig {
     required this.connectionTimeoutSeconds,
     required this.persistenceEnabled,
     required this.storagePath,
+    required this.batteryConfig,
     required this.resourceLimits,
     required this.mqttSecurity,
   });
@@ -126,6 +132,7 @@ class MerkleKVConfig {
     int connectionTimeoutSeconds = 20,
     bool persistenceEnabled = false,
     String? storagePath,
+    BatteryAwarenessConfig? batteryConfig,
     ResourceLimits? resourceLimits,
     MqttSecurityConfig? mqttSecurity,
   }) {
@@ -145,6 +152,7 @@ class MerkleKVConfig {
       connectionTimeoutSeconds: connectionTimeoutSeconds,
       persistenceEnabled: persistenceEnabled,
       storagePath: storagePath,
+      batteryConfig: batteryConfig ?? const BatteryAwarenessConfig(),
       resourceLimits: resourceLimits,
       mqttSecurity: mqttSecurity,
     );
@@ -158,12 +166,14 @@ class MerkleKVConfig {
     required String clientId,
     required String nodeId,
     bool tls = false,
+    BatteryAwarenessConfig? batteryConfig,
   }) {
     return MerkleKVConfig(
       mqttHost: host,
       mqttUseTls: tls,
       clientId: clientId,
       nodeId: nodeId,
+      batteryConfig: batteryConfig,
     );
   }
 
@@ -189,6 +199,7 @@ class MerkleKVConfig {
     int tombstoneRetentionHours = 24,
     bool persistenceEnabled = false,
     String? storagePath,
+    BatteryAwarenessConfig? batteryConfig,
     ResourceLimits? resourceLimits,
     MqttSecurityConfig? mqttSecurity,
   }) {
@@ -216,6 +227,7 @@ class MerkleKVConfig {
       tombstoneRetentionHours: tombstoneRetentionHours,
       persistenceEnabled: persistenceEnabled,
       storagePath: resolvedStoragePath,
+      batteryConfig: batteryConfig ?? const BatteryAwarenessConfig(),
       resourceLimits: resourceLimits,
       mqttSecurity: mqttSecurity,
     );
@@ -238,6 +250,7 @@ class MerkleKVConfig {
     required int connectionTimeoutSeconds,
     required bool persistenceEnabled,
     String? storagePath,
+    required BatteryAwarenessConfig batteryConfig,
     ResourceLimits? resourceLimits,
     MqttSecurityConfig? mqttSecurity,
   }) {
@@ -372,6 +385,7 @@ class MerkleKVConfig {
       tombstoneRetentionHours: tombstoneRetentionHours,
       persistenceEnabled: persistenceEnabled,
       storagePath: storagePath,
+      batteryConfig: batteryConfig,
       resourceLimits: resourceLimits,
       mqttSecurity: mqttSecurity,
     );
@@ -407,6 +421,7 @@ class MerkleKVConfig {
     int? tombstoneRetentionHours,
     bool? persistenceEnabled,
     String? storagePath,
+    BatteryAwarenessConfig? batteryConfig,
     ResourceLimits? resourceLimits,
     MqttSecurityConfig? mqttSecurity,
   }) {
@@ -436,6 +451,7 @@ class MerkleKVConfig {
           tombstoneRetentionHours ?? this.tombstoneRetentionHours,
       persistenceEnabled: persistenceEnabled ?? this.persistenceEnabled,
       storagePath: storagePath ?? this.storagePath,
+      batteryConfig: batteryConfig ?? this.batteryConfig,
       resourceLimits: resourceLimits ?? this.resourceLimits,
       mqttSecurity: mqttSecurity ?? this.mqttSecurity,
     );
@@ -459,6 +475,14 @@ class MerkleKVConfig {
       'tombstoneRetentionHours': tombstoneRetentionHours,
       'persistenceEnabled': persistenceEnabled,
       'storagePath': storagePath,
+      'batteryConfig': {
+        'lowBatteryThreshold': batteryConfig.lowBatteryThreshold,
+        'criticalBatteryThreshold': batteryConfig.criticalBatteryThreshold,
+        'adaptiveKeepAlive': batteryConfig.adaptiveKeepAlive,
+        'adaptiveSyncInterval': batteryConfig.adaptiveSyncInterval,
+        'enableOperationThrottling': batteryConfig.enableOperationThrottling,
+        'reduceBackgroundActivity': batteryConfig.reduceBackgroundActivity,
+      },
       'resourceLimits': resourceLimits?.toJson(),
       'mqttSecurity': mqttSecurity?.toJson(),
     };
@@ -474,6 +498,7 @@ class MerkleKVConfig {
     String? password,
     String? clientKeyPassword,
   }) {
+    // Parse optional MQTT security configuration (secrets provided via args)
     final secJson = json['mqttSecurity'] as Map<String, dynamic>?;
     final security = secJson == null
         ? null
@@ -483,6 +508,26 @@ class MerkleKVConfig {
             password: password,
             clientKeyPassword: clientKeyPassword,
           );
+
+    // Parse battery awareness configuration with safe defaults
+    final batteryConfigData = json['batteryConfig'] as Map<String, dynamic>?;
+    final batteryConfig = batteryConfigData != null
+        ? BatteryAwarenessConfig(
+            lowBatteryThreshold:
+                batteryConfigData['lowBatteryThreshold'] as int? ?? 20,
+            criticalBatteryThreshold:
+                batteryConfigData['criticalBatteryThreshold'] as int? ?? 10,
+            adaptiveKeepAlive:
+                batteryConfigData['adaptiveKeepAlive'] as bool? ?? true,
+            adaptiveSyncInterval:
+                batteryConfigData['adaptiveSyncInterval'] as bool? ?? true,
+            enableOperationThrottling:
+                batteryConfigData['enableOperationThrottling'] as bool? ??
+                    true,
+            reduceBackgroundActivity:
+                batteryConfigData['reduceBackgroundActivity'] as bool? ?? true,
+          )
+        : const BatteryAwarenessConfig();
 
     return MerkleKVConfig(
       mqttHost: json['mqttHost'] as String,
@@ -499,6 +544,7 @@ class MerkleKVConfig {
       tombstoneRetentionHours: json['tombstoneRetentionHours'] as int? ?? 24,
       persistenceEnabled: json['persistenceEnabled'] as bool? ?? false,
       storagePath: json['storagePath'] as String?,
+      batteryConfig: batteryConfig,
       resourceLimits: json['resourceLimits'] == null
           ? null
           : ResourceLimits.fromJson(
@@ -528,6 +574,13 @@ class MerkleKVConfig {
         'tombstoneRetentionHours: $tombstoneRetentionHours, '
         'persistenceEnabled: $persistenceEnabled, '
         'storagePath: $storagePath, '
+        'batteryConfig: BatteryAwarenessConfig('
+          'lowBatteryThreshold: ${batteryConfig.lowBatteryThreshold}, '
+          'criticalBatteryThreshold: ${batteryConfig.criticalBatteryThreshold}, '
+          'adaptiveKeepAlive: ${batteryConfig.adaptiveKeepAlive}, '
+          'adaptiveSyncInterval: ${batteryConfig.adaptiveSyncInterval}, '
+          'enableOperationThrottling: ${batteryConfig.enableOperationThrottling}, '
+          'reduceBackgroundActivity: ${batteryConfig.reduceBackgroundActivity}), '
         'resourceLimits: ${resourceLimits?.toString()}, '
         'mqttSecurity: ${mqttSecurity?.toJson()}'
         '}';
