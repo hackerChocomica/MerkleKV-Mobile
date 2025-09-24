@@ -1,10 +1,13 @@
 import 'package:test/test.dart';
 import 'package:merkle_kv_core/merkle_kv_core.dart';
 import 'test_config.dart';
+import '../utils/test_broker_helper.dart';
 
 void main() {
   group('Basic MQTT Broker Connectivity', () {
     setUpAll(() async {
+      // Ensure broker present (start embedded if needed, unless IT_REQUIRE_BROKER=1)
+      await TestBrokerHelper.ensureBroker(port: IntegrationTestConfig.mosquittoPort);
       // Validate test environment
       expect(IntegrationTestConfig.mosquittoHost, isNotEmpty,
           reason: 'MQTT broker host must be configured');

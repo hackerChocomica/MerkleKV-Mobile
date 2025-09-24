@@ -2,6 +2,7 @@ import 'package:test/test.dart';
 import 'package:merkle_kv_core/merkle_kv_core.dart';
 
 import 'test_config.dart';
+import '../utils/test_broker_helper.dart';
 
 /// Simplified security integration tests.
 /// Tests configuration validation when TLS brokers are not available.
@@ -57,6 +58,9 @@ void main() {
     });
 
     group('ACL Access Control Tests', () {
+      setUpAll(() async {
+        await TestBrokerHelper.ensureBroker(port: IntegrationTestConfig.mosquittoPort);
+      });
       test('Authorized client can access permitted topics', () async {
         // Test basic topic access with available broker
         final config = TestConfigurations.mosquittoBasic(

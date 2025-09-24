@@ -6,6 +6,7 @@ import '../../lib/src/mqtt/connection_lifecycle.dart';
 import '../../lib/src/mqtt/connection_state.dart';
 import '../../lib/src/mqtt/mqtt_client_impl.dart';
 import '../../lib/src/replication/metrics.dart';
+import '../utils/test_broker_helper.dart';
 
 // Integration test timing constants
 class IntegrationTestTimings {
@@ -59,6 +60,8 @@ void main() {
     
     setUpAll(() async {
       // Enforce broker availability if required; this makes tests fail fast instead of skip
+      // First, if not explicitly required, ensure an embedded broker is running
+      await TestBrokerHelper.ensureBroker(port: port);
       final ok = await _brokerAvailable(host, port);
       if (!ok && requireBroker) {
         fail('Broker required for integration tests but not available at $host:$port');
@@ -80,7 +83,7 @@ void main() {
       metrics = InMemoryReplicationMetrics();
     });
 
-    group('Real broker connection lifecycle', () {
+  group('Real broker connection lifecycle', () {
       test('successful connection and disconnection', () async {
         // Ensure broker availability (no skip logic)
         if (!await _brokerAvailable(host, port)) {

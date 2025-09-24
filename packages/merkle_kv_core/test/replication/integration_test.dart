@@ -391,9 +391,9 @@ Future<void> waitForOutboxDrained(ReplicationEventPublisherImpl publisher, {Dura
       }
     });
 
-    // Kick a status emission if needed
-    // Wait a moment for any pending emit
-    await Future.delayed(const Duration(milliseconds: 10));
+    // Kick a status emission and potential drain if needed (no-op if already empty)
+    // Schedule to avoid racing with the above subscription
+    Future.microtask(() => publisher.flushOutbox());
 
     timer = Timer(timeout, () {
       if (!completer.isCompleted) {
