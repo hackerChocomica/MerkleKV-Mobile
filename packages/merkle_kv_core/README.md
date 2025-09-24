@@ -123,6 +123,34 @@ await client.set('key', 'value'); // Publishes SET event
 await client.delete('key');       // Publishes DEL event
 ```
 
+### Secure MQTT (TLS + Auth)
+
+```dart
+// Simple TLS with username/password
+final tlsConfig = MerkleKVConfig(
+  mqttHost: 'secure-broker.example.com',
+  mqttPort: 8883,
+  mqttUseTls: true,
+  clientId: 'app-instance-1',
+  nodeId: 'mobile-device-1',
+  username: '<from-keystore>',
+  password: '<from-keystore>',
+);
+
+// Or explicit security options
+final advanced = tlsConfig.copyWith(
+  mqttSecurity: MqttSecurityConfig(
+    enableTLS: true,
+    minTLSVersion: TLSVersion.v1_2,
+    enforceHostnameValidation: true,
+    validateCertificateChain: true,
+    authMethod: AuthenticationMethod.usernamePassword,
+    username: '<from-keystore>',
+    password: '<from-keystore>',
+  ),
+);
+```
+
 ### Anti-Entropy Synchronization
 
 ```dart

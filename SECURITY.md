@@ -105,29 +105,23 @@ We follow responsible disclosure practices:
 - Use VPN or private networks when possible
 - Regular broker security updates
 
-**Client Configuration**:
+**Client Configuration** (Dart):
 
-```javascript
-const config = {
-  // Always use secure connections
-  protocol: 'mqtts',
-  port: 8883,
-  
-  // Enforce TLS 1.2+
-  secureProtocol: 'TLSv1_2_method',
-  
-  // Certificate validation
-  rejectUnauthorized: true,
-  
-  // Connection security
-  username: process.env.MQTT_USERNAME,
-  password: process.env.MQTT_PASSWORD,
-  
-  // Client certificate (if using mutual TLS)
-  cert: fs.readFileSync('client-cert.pem'),
-  key: fs.readFileSync('client-key.pem'),
-  ca: fs.readFileSync('ca-cert.pem')
-};
+```dart
+// Use TLS 1.2+ and validate certificates. Provide secrets from secure storage.
+final config = MerkleKVConfig(
+  mqttHost: 'broker.example.com',
+  mqttPort: 8883,
+  mqttSecurity: MqttSecurityConfig(
+    enableTLS: true,
+    minTLSVersion: TLSVersion.v1_2,
+    enforceHostnameValidation: true,
+    validateCertificateChain: true,
+    authMethod: AuthenticationMethod.usernamePassword,
+    username: '<from-keystore>',
+    password: '<from-keystore>',
+  ),
+);
 ```
 
 **Access Control Lists (ACLs)**:

@@ -136,6 +136,7 @@ class AppLifecycleHandler with WidgetsBindingObserver {
 
 ### Secure Configuration
 
+Option A — Simple TLS with username/password:
 ```dart
 final secureConfig = MerkleKVConfig(
   mqttHost: 'secure-broker.example.com',
@@ -149,12 +150,32 @@ final secureConfig = MerkleKVConfig(
 );
 ```
 
+Option B — Explicit TLS/auth configuration via MqttSecurityConfig:
+```dart
+final secureConfig = MerkleKVConfig(
+  mqttHost: 'secure-broker.example.com',
+  mqttPort: 8883,
+  nodeId: 'secure-node',
+  clientId: 'secure-client',
+  keepAliveSeconds: 60,
+  mqttSecurity: MqttSecurityConfig(
+    enableTLS: true,
+    minTLSVersion: TLSVersion.v1_2,
+    enforceHostnameValidation: true,
+    validateCertificateChain: true,
+    authMethod: AuthenticationMethod.usernamePassword,
+    username: 'secure-user',
+    password: 'secure-password',
+  ),
+);
+```
+
 ## Configuration Options
 
 ### Connection Parameters
 - `mqttHost`: MQTT broker hostname/IP
 - `mqttPort`: MQTT broker port (1883 for plain, 8883 for TLS)
-- `mqttUseTls`: Enable TLS encryption
+- `mqttUseTls`: Enable TLS encryption (or use `mqttSecurity.enableTLS`)
 - `username`/`password`: Authentication credentials
 - `keepAliveSeconds`: MQTT keep-alive interval
 
