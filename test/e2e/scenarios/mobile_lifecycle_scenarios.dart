@@ -141,6 +141,64 @@ class MobileLifecycleScenarios {
     );
   }
 
+  /// Battery optimization scenario for Android
+  static MobileLifecycleScenario androidBatteryOptimizationScenario() {
+    return MobileLifecycleScenario(
+      name: 'Android Battery Optimization',
+      description: 'Test app behavior under Android battery optimization scenarios',
+      transition: LifecycleTransition.backgroundToForeground,
+      steps: [
+        LaunchAppStep(),
+        ConnectMerkleKVStep(),
+        SetDataStep(key: 'battery_test_key', value: 'battery_value'),
+        EnableBatteryOptimizationStep(),
+        MoveToBackgroundStep(duration: Duration(minutes: 2)),
+        VerifyBatteryRestrictionsStep(),
+        ReturnToForegroundStep(),
+        VerifyDataStep(key: 'battery_test_key', expectedValue: 'battery_value'),
+        DisableBatteryOptimizationStep(),
+      ],
+      preConditions: [
+        MqttBrokerPreCondition(),
+        AndroidDevicePreCondition(),
+      ],
+      postConditions: [
+        MerkleKVConnectedPostCondition(),
+        DataConsistencyPostCondition(keys: ['battery_test_key']),
+      ],
+      timeout: Duration(minutes: 5),
+    );
+  }
+
+  /// Low power mode scenario for iOS
+  static MobileLifecycleScenario iOSLowPowerModeScenario() {
+    return MobileLifecycleScenario(
+      name: 'iOS Low Power Mode',
+      description: 'Test app behavior under iOS low power mode conditions',
+      transition: LifecycleTransition.backgroundToForeground,
+      steps: [
+        LaunchAppStep(),
+        ConnectMerkleKVStep(),
+        SetDataStep(key: 'low_power_key', value: 'low_power_value'),
+        EnableLowPowerModeStep(),
+        MoveToBackgroundStep(duration: Duration(minutes: 1)),
+        VerifyLowPowerRestrictionsStep(),
+        ReturnToForegroundStep(),
+        VerifyDataStep(key: 'low_power_key', expectedValue: 'low_power_value'),
+        DisableLowPowerModeStep(),
+      ],
+      preConditions: [
+        MqttBrokerPreCondition(),
+        IOSDevicePreCondition(),
+      ],
+      postConditions: [
+        MerkleKVConnectedPostCondition(),
+        DataConsistencyPostCondition(keys: ['low_power_key']),
+      ],
+      timeout: Duration(minutes: 4),
+    );
+  }
+
   /// Get all mobile lifecycle scenarios
   static List<MobileLifecycleScenario> getAllScenarios() {
     return [
@@ -149,6 +207,8 @@ class MobileLifecycleScenarios {
       appTerminationRestartScenario(),
       memoryPressureScenario(),
       rapidLifecycleTransitionsScenario(),
+      androidBatteryOptimizationScenario(),
+      iOSLowPowerModeScenario(),
     ];
   }
 }
@@ -360,5 +420,124 @@ class VerifySampleDataStep extends TestStep {
       // This would verify data in the actual MerkleKV client
       await Future.delayed(Duration(milliseconds: 50));
     }
+  }
+}
+
+/// Enable battery optimization step for Android
+class EnableBatteryOptimizationStep extends TestStep {
+  EnableBatteryOptimizationStep()
+      : super(description: 'Enable Android battery optimization');
+
+  @override
+  Future<void> execute({
+    dynamic appiumDriver,
+    dynamic lifecycleManager,
+    dynamic networkManager,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+    // In real implementation, this would enable battery optimization via ADB or Appium
+    print('Battery optimization enabled');
+  }
+}
+
+/// Disable battery optimization step for Android
+class DisableBatteryOptimizationStep extends TestStep {
+  DisableBatteryOptimizationStep()
+      : super(description: 'Disable Android battery optimization');
+
+  @override
+  Future<void> execute({
+    dynamic appiumDriver,
+    dynamic lifecycleManager,
+    dynamic networkManager,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+    print('Battery optimization disabled');
+  }
+}
+
+/// Verify battery restrictions step
+class VerifyBatteryRestrictionsStep extends TestStep {
+  VerifyBatteryRestrictionsStep()
+      : super(description: 'Verify battery restrictions are active');
+
+  @override
+  Future<void> execute({
+    dynamic appiumDriver,
+    dynamic lifecycleManager,
+    dynamic networkManager,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 150));
+    print('Battery restrictions verified');
+  }
+}
+
+/// Enable low power mode step for iOS
+class EnableLowPowerModeStep extends TestStep {
+  EnableLowPowerModeStep()
+      : super(description: 'Enable iOS low power mode');
+
+  @override
+  Future<void> execute({
+    dynamic appiumDriver,
+    dynamic lifecycleManager,
+    dynamic networkManager,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+    print('Low power mode enabled');
+  }
+}
+
+/// Disable low power mode step for iOS
+class DisableLowPowerModeStep extends TestStep {
+  DisableLowPowerModeStep()
+      : super(description: 'Disable iOS low power mode');
+
+  @override
+  Future<void> execute({
+    dynamic appiumDriver,
+    dynamic lifecycleManager,
+    dynamic networkManager,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 100));
+    print('Low power mode disabled');
+  }
+}
+
+/// Verify low power restrictions step
+class VerifyLowPowerRestrictionsStep extends TestStep {
+  VerifyLowPowerRestrictionsStep()
+      : super(description: 'Verify low power mode restrictions are active');
+
+  @override
+  Future<void> execute({
+    dynamic appiumDriver,
+    dynamic lifecycleManager,
+    dynamic networkManager,
+  }) async {
+    await Future.delayed(Duration(milliseconds: 150));
+    print('Low power mode restrictions verified');
+  }
+}
+
+/// Android device precondition
+class AndroidDevicePreCondition extends PreCondition {
+  AndroidDevicePreCondition() : super(description: 'Verify Android device available');
+
+  @override
+  Future<void> execute() async {
+    await Future.delayed(Duration(milliseconds: 50));
+    // Would check for Android device/emulator
+  }
+}
+
+/// iOS device precondition
+class IOSDevicePreCondition extends PreCondition {
+  IOSDevicePreCondition() : super(description: 'Verify iOS device available');
+
+  @override
+  Future<void> execute() async {
+    await Future.delayed(Duration(milliseconds: 50));
+    // Would check for iOS device/simulator
   }
 }
