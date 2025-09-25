@@ -116,6 +116,8 @@ class MockStorage extends Mock implements StorageInterface {
 class MockMqttClient extends Mock implements MqttClientInterface {
   final StreamController<ConnectionState> _connectionStateController = 
       StreamController<ConnectionState>.broadcast();
+  final StreamController<String> _subAckController =
+      StreamController<String>.broadcast();
   
   final Map<String, void Function(String, String)> _subscriptions = {};
   final List<PublishCall> _publishCalls = [];
@@ -123,6 +125,9 @@ class MockMqttClient extends Mock implements MqttClientInterface {
 
   @override
   Stream<ConnectionState> get connectionState => _connectionStateController.stream;
+
+  @override
+  Stream<String> get onSubscribed => _subAckController.stream;
 
   @override
   ConnectionState get currentConnectionState => _currentState;
@@ -144,6 +149,12 @@ class MockMqttClient extends Mock implements MqttClientInterface {
   @override
   Future<void> subscribe(String topic, void Function(String, String) handler) async {
     _subscriptions[topic] = handler;
+    // Simulate async SUBACK acknowledgment microtask
+    scheduleMicrotask(() {
+      if (!_subAckController.isClosed) {
+        _subAckController.add(topic);
+      }
+    });
   }
 
   @override
@@ -157,12 +168,13 @@ class MockMqttClient extends Mock implements MqttClientInterface {
     String payload, {
     bool forceQoS1 = true,
     bool forceRetainFalse = true,
+    bool? retain,
   }) async {
     _publishCalls.add(PublishCall(
       topic: topic,
       payload: payload,
       qos1: forceQoS1,
-      retainFalse: forceRetainFalse,
+      retainFalse: retain == null ? forceRetainFalse : !retain,
     ));
   }
 
@@ -208,6 +220,7 @@ class MockMqttClient extends Mock implements MqttClientInterface {
   Future<void> dispose() async {
     reset(); // Clear internal state to prevent memory leaks
     await _connectionStateController.close();
+    await _subAckController.close();
   }
 }
 

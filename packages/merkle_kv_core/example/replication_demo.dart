@@ -25,7 +25,7 @@ class MockMqttClient implements MqttClientInterface {
   }
 
   @override
-  Future<void> publish(String topic, String payload, {bool forceQoS1 = true, bool forceRetainFalse = true}) async {
+  Future<void> publish(String topic, String payload, {bool forceQoS1 = true, bool forceRetainFalse = true, bool? retain}) async {
     if (_state != ConnectionState.connected) {
       throw Exception('Not connected');
     }

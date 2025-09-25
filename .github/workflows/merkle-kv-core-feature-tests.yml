@@ -192,6 +192,7 @@ jobs:
         run: |
           set -euxo pipefail
           dart test test/integration/external_vs_embedded_broker_mode_test.dart -r compact --platform vm --compiler source
+          dart test test/integration/response_subscription_restore_test.dart -r compact --platform vm --compiler source
 
       - name: Prepare test workspace
         working-directory: ${{ env.WORKING_DIR }}

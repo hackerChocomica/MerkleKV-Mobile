@@ -11,6 +11,14 @@ abstract class MqttClientInterface {
   /// Emits current state and all subsequent state transitions.
   Stream<ConnectionState> get connectionState;
 
+  /// Stream of topic names as they are acknowledged (SUBACK) by the broker.
+  ///
+  /// Implementations should emit each topic filter after the broker confirms
+  /// the subscription (i.e. after receiving SUBACK). This enables higher-level
+  /// coordination (such as deterministic re-subscription restoration waits)
+  /// without relying on arbitrary delays.
+  Stream<String> get onSubscribed;
+
   /// Current connection state snapshot.
   ///
   /// Should reflect the latest known connection state immediately without
@@ -44,6 +52,7 @@ abstract class MqttClientInterface {
     String payload, {
     bool forceQoS1 = true,
     bool forceRetainFalse = true,
+    bool? retain,
   });
 
   /// Subscribe to a topic with message handler.

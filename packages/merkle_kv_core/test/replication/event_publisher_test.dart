@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -10,9 +11,13 @@ class MockMqttClient implements MqttClientInterface {
   final List<String> subscribedTopics = [];
   ConnectionState _state = ConnectionState.disconnected;
   final List<Function(String, String)> _handlers = [];
+  final StreamController<String> _subAckController = StreamController.broadcast();
 
   @override
   Stream<ConnectionState> get connectionState => Stream.value(_state);
+
+  @override
+  Stream<String> get onSubscribed => _subAckController.stream;
 
   @override
   ConnectionState get currentConnectionState => _state;
@@ -37,6 +42,7 @@ class MockMqttClient implements MqttClientInterface {
     String payload, {
     bool forceQoS1 = true,
     bool forceRetainFalse = true,
+    bool? retain,
   }) async {
     if (_state != ConnectionState.connected) {
       throw Exception('Not connected');
@@ -48,6 +54,9 @@ class MockMqttClient implements MqttClientInterface {
   Future<void> subscribe(String topic, void Function(String, String) handler) async {
     subscribedTopics.add(topic);
     _handlers.add(handler);
+    Future.microtask(() {
+      if (!_subAckController.isClosed) _subAckController.add(topic);
+    });
   }
 
   @override
@@ -58,6 +67,10 @@ class MockMqttClient implements MqttClientInterface {
   void clear() {
     publishedMessages.clear();
     subscribedTopics.clear();
+  }
+
+  void dispose() {
+    _subAckController.close();
   }
 }
 

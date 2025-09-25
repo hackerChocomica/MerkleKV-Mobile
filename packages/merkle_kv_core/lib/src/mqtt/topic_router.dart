@@ -77,6 +77,13 @@ class TopicRouterImpl implements TopicRouter {
 
   // Connection state monitoring
   StreamSubscription<ConnectionState>? _connectionSubscription;
+  // Tracks completion of the most recent restoration cycle so tests (or
+  // higher-level orchestration) can deterministically await subscription
+  // re-establishment after a reconnect.
+  Completer<void>? _lastRestoreCompleter;
+  // Tracks pending topic filters awaiting SUBACK during a restoration cycle.
+  Set<String>? _pendingRestoreTopics;
+  StreamSubscription<String>? _subAckSub;
 
   /// Creates a TopicRouter with the provided configuration and MQTT client.
   TopicRouterImpl(MerkleKVConfig config, this._mqttClient)
@@ -93,13 +100,26 @@ class TopicRouterImpl implements TopicRouter {
   void _initializeConnectionMonitoring() {
     _connectionSubscription = _mqttClient.connectionState.listen((state) {
       if (state == ConnectionState.connected) {
-        _restoreSubscriptions();
+        // Defer restoration to next microtask to ensure the underlying
+        // MQTT client's onConnected handler has finished attaching the
+        // updates stream listener and re-establishing its own internal
+        // subscriptions. This avoids a subtle race where we resubscribe
+        // before the updates listener is ready, potentially missing early
+        // publications emitted immediately after reconnect.
+        scheduleMicrotask(() {
+          _restoreSubscriptions();
+        });
       }
     });
   }
 
   /// Restore active subscriptions after reconnection.
   Future<void> _restoreSubscriptions() async {
+    // Start a new restore cycle completer
+    final completer = Completer<void>();
+    _lastRestoreCompleter = completer;
+    _subAckSub?.cancel();
+    _pendingRestoreTopics = <String>{};
     developer.log(
       'Restoring subscriptions after reconnection',
       name: 'TopicRouter',
@@ -109,6 +129,7 @@ class TopicRouterImpl implements TopicRouter {
     // Re-subscribe to commands if handler is active
     if (_commandHandler != null) {
       await _mqttClient.subscribe(_topicScheme.commandTopic, _commandHandler!);
+      _pendingRestoreTopics!.add(_topicScheme.commandTopic);
       developer.log(
         'Restored command subscription: ${_topicScheme.commandTopic}',
         name: 'TopicRouter',
@@ -119,6 +140,7 @@ class TopicRouterImpl implements TopicRouter {
     // Re-subscribe to responses if handler is active
     if (_responseHandler != null) {
       await _mqttClient.subscribe(_topicScheme.responseTopic, _responseHandler!);
+      _pendingRestoreTopics!.add(_topicScheme.responseTopic);
       developer.log(
         'Restored response subscription: ${_topicScheme.responseTopic}',
         name: 'TopicRouter',
@@ -130,6 +152,7 @@ class TopicRouterImpl implements TopicRouter {
     for (final sub in _foreignResponseSubs) {
       final topic = TopicValidator.buildResponseTopic(_topicScheme.prefix, sub.clientId);
       await _mqttClient.subscribe(topic, sub.handler);
+      _pendingRestoreTopics!.add(topic);
       developer.log(
         'Restored foreign response subscription: $topic',
         name: 'TopicRouter',
@@ -143,11 +166,61 @@ class TopicRouterImpl implements TopicRouter {
         _topicScheme.replicationTopic,
         _replicationHandler!,
       );
+      _pendingRestoreTopics!.add(_topicScheme.replicationTopic);
       developer.log(
         'Restored replication subscription: ${_topicScheme.replicationTopic}',
         name: 'TopicRouter',
         level: 800, // INFO
       );
+    }
+    // If there are no pending topics (no active subscriptions), complete immediately.
+    if (_pendingRestoreTopics!.isEmpty) {
+      if (!completer.isCompleted) completer.complete();
+      return;
+    }
+
+    // Listen for SUBACK acknowledgments of the restored topics. Complete the
+    // restoration cycle only after all have been acknowledged or a timeout
+    // occurs (as a safety valve to avoid hanging tests if acks are missed).
+    final pending = _pendingRestoreTopics!;
+    _subAckSub = _mqttClient.onSubscribed.listen((topic) {
+      if (pending.remove(topic)) {
+        developer.log(
+          'Acknowledged restored subscription: $topic (remaining=${pending.length})',
+          name: 'TopicRouter',
+          level: 800,
+        );
+        if (pending.isEmpty && !completer.isCompleted) {
+          completer.complete();
+        }
+      }
+    });
+
+    // Safety timeout: complete even if some acks not observed (broker impl
+    // variance). This still allows forward progress while logging.
+    Future.delayed(const Duration(milliseconds: 750), () {
+      if (!completer.isCompleted) {
+        developer.log(
+          'Restore timeout elapsed with pending=${pending.length}; completing restoration early',
+          name: 'TopicRouter',
+          level: 800,
+        );
+        completer.complete();
+      }
+    });
+  }
+
+  /// Await the completion of the most recent restoration cycle. If no
+  /// restoration is in progress (or has already completed), this returns
+  /// immediately. Intended primarily for integration tests to eliminate
+  /// arbitrary sleep-based timing.
+  Future<void> waitForRestore({Duration timeout = const Duration(seconds: 2)}) async {
+    final c = _lastRestoreCompleter;
+    if (c == null || c.isCompleted) return;
+    try {
+      await c.future.timeout(timeout, onTimeout: () {});
+    } catch (_) {
+      // Swallow – timeout simply means restore not witnessed within window.
     }
   }
 
@@ -304,10 +377,12 @@ class TopicRouterImpl implements TopicRouter {
   Future<void> dispose() async {
     await _connectionSubscription?.cancel();
     _connectionSubscription = null;
+    await _subAckSub?.cancel();
     _commandHandler = null;
   _responseHandler = null;
     _replicationHandler = null;
     _foreignResponseSubs.clear();
+    _pendingRestoreTopics = null;
 
     developer.log(
       'TopicRouter disposed',
