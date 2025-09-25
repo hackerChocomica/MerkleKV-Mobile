@@ -29,6 +29,7 @@ abstract class TopicRouter {
   ///
   /// [handler] - Callback function (topic, payload) => void
   Future<void> subscribeToResponses(void Function(String, String) handler);
+  Future<void> subscribeToResponsesOf(String clientId, void Function(String, String) handler);
 
   /// Publish a command message to target client.
   ///
@@ -70,6 +71,10 @@ class TopicRouterImpl implements TopicRouter {
   void Function(String, String)? _responseHandler;
   void Function(String, String)? _replicationHandler;
 
+  // Controller may subscribe to other clients' response topics; track them for
+  // reconnection restoration.
+  final List<_ForeignResponseSubscription> _foreignResponseSubs = [];
+
   // Connection state monitoring
   StreamSubscription<ConnectionState>? _connectionSubscription;
 
@@ -78,9 +83,9 @@ class TopicRouterImpl implements TopicRouter {
     : _topicScheme = TopicScheme.create(config.topicPrefix, config.clientId),
       _enforceAuthz = TopicValidator.normalizePrefix(config.topicPrefix) == 'merkle_kv',
       _permissions = TopicPermissions(
-        clientId: config.clientId,
-        replicationAccess: config.replicationAccess,
-      ) {
+          clientId: config.clientId,
+          replicationAccess: config.replicationAccess,
+          isController: config.isController) {
     _initializeConnectionMonitoring();
   }
 
@@ -118,6 +123,17 @@ class TopicRouterImpl implements TopicRouter {
         'Restored response subscription: ${_topicScheme.responseTopic}',
         name: 'TopicRouter',
         level: 800, // INFO
+      );
+    }
+
+    // Restore controller foreign response subscriptions
+    for (final sub in _foreignResponseSubs) {
+      final topic = TopicValidator.buildResponseTopic(_topicScheme.prefix, sub.clientId);
+      await _mqttClient.subscribe(topic, sub.handler);
+      developer.log(
+        'Restored foreign response subscription: $topic',
+        name: 'TopicRouter',
+        level: 800,
       );
     }
 
@@ -167,13 +183,33 @@ class TopicRouterImpl implements TopicRouter {
   Future<void> subscribeToResponses(
     void Function(String, String) handler,
   ) async {
+    // Always own responses
     _responseHandler = handler;
     await _mqttClient.subscribe(_topicScheme.responseTopic, handler);
+    _metrics.responseSubscribeAllowed++;
 
     developer.log(
       'Subscribed to responses: ${_topicScheme.responseTopic}',
       name: 'TopicRouter',
       level: 800, // INFO
+    );
+  }
+
+  @override
+  Future<void> subscribeToResponsesOf(String clientId, void Function(String, String) handler) async {
+    if (_enforceAuthz && !_permissions.canSubscribeToResponsesOf(clientId)) {
+      _metrics.responseSubscribeDenied++;
+      throw ApiException(302, 'Not authorized to subscribe to responses of $clientId');
+    }
+    // Build topic for target client responses
+    final topic = TopicValidator.buildResponseTopic(_topicScheme.prefix, clientId);
+    await _mqttClient.subscribe(topic, handler);
+    _metrics.responseSubscribeAllowed++;
+    _foreignResponseSubs.add(_ForeignResponseSubscription(clientId, handler));
+    developer.log(
+      'Subscribed to responses of $clientId: $topic',
+      name: 'TopicRouter',
+      level: 800,
     );
   }
 
@@ -219,7 +255,7 @@ class TopicRouterImpl implements TopicRouter {
     _metrics.commandDenied++;
     throw ApiException(
       300,
-      'Not authorized to publish commands to $targetClientId (canonical scheme requires self-only command publish)',
+      'Not authorized to publish commands to $targetClientId (requires controller role or self)',
     );
   }
 
@@ -271,6 +307,7 @@ class TopicRouterImpl implements TopicRouter {
     _commandHandler = null;
   _responseHandler = null;
     _replicationHandler = null;
+    _foreignResponseSubs.clear();
 
     developer.log(
       'TopicRouter disposed',
@@ -281,4 +318,23 @@ class TopicRouterImpl implements TopicRouter {
 
   @override
   TopicAuthzMetrics get authzMetrics => _metrics;
+
+  /// Publish current authz metrics to an internal metrics topic (fire-and-forget)
+  /// Only under canonical scheme to avoid polluting custom prefixes.
+  Future<void> publishAuthzMetrics() async {
+    if (!_enforceAuthz) return;
+    final metricsTopic = '${_topicScheme.prefix}/metrics/authz';
+    await _mqttClient.publish(
+      metricsTopic,
+      authzMetrics.toJson().toString(),
+      forceQoS1: false,
+      forceRetainFalse: true,
+    );
+  }
+}
+
+class _ForeignResponseSubscription {
+  final String clientId;
+  final void Function(String, String) handler;
+  _ForeignResponseSubscription(this.clientId, this.handler);
 }

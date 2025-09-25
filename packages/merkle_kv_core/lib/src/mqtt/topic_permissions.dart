@@ -17,18 +17,25 @@ enum ReplicationAccess {
 class TopicPermissions {
   final String clientId;
   final ReplicationAccess replicationAccess;
+  final bool isController;
 
   const TopicPermissions({
     required this.clientId,
     this.replicationAccess = ReplicationAccess.readWrite,
+    this.isController = false,
   });
 
-  /// A client can only publish commands to its own command topic.
-  bool canPublishCommand(String targetClientId) => clientId == targetClientId;
+  /// A controller can publish to any client; non-controller only to self.
+  bool canPublishCommand(String targetClientId) =>
+      isController || clientId == targetClientId;
 
-  /// Response publish is always allowed for the local client (loopback semantics).
+  /// Response publish is always allowed for local client.
   bool canPublishResponse() => true;
 
+  bool canSubscribeToResponsesOf(String targetClientId) =>
+      isController ? true : targetClientId == clientId;
+
   /// Replication publish requires readWrite replication access.
-  bool canPublishReplication() => replicationAccess == ReplicationAccess.readWrite;
+  bool canPublishReplication() =>
+      replicationAccess == ReplicationAccess.readWrite;
 }

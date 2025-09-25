@@ -91,6 +91,11 @@ class MerkleKVConfig {
   /// Replication topic access level (authorization scope for canonical prefix).
   final ReplicationAccess replicationAccess;
 
+  /// Whether this client acts as a privileged controller (may publish
+  /// cross-client commands under canonical prefix and subscribe to other
+  /// clients' responses for orchestration / debugging).
+  final bool isController;
+
   /// Static security warning handler for non-TLS credential usage.
   static void Function(String message)? _onSecurityWarning;
 
@@ -115,6 +120,7 @@ class MerkleKVConfig {
     required this.resourceLimits,
     required this.mqttSecurity,
     required this.replicationAccess,
+    this.isController = false,
   });
 
   /// Creates a new MerkleKVConfig with validation and default values.
@@ -141,6 +147,7 @@ class MerkleKVConfig {
     ResourceLimits? resourceLimits,
     MqttSecurityConfig? mqttSecurity,
     ReplicationAccess replicationAccess = ReplicationAccess.readWrite,
+    bool isController = false,
   }) {
     return MerkleKVConfig._validated(
       mqttHost: mqttHost,
@@ -162,6 +169,7 @@ class MerkleKVConfig {
       resourceLimits: resourceLimits,
       mqttSecurity: mqttSecurity,
       replicationAccess: replicationAccess,
+      isController: isController,
     );
   }
 
@@ -175,6 +183,7 @@ class MerkleKVConfig {
     bool tls = false,
     BatteryAwarenessConfig? batteryConfig,
     ReplicationAccess replicationAccess = ReplicationAccess.readWrite,
+    bool isController = false,
   }) {
     return MerkleKVConfig(
       mqttHost: host,
@@ -183,6 +192,7 @@ class MerkleKVConfig {
       nodeId: nodeId,
       batteryConfig: batteryConfig,
       replicationAccess: replicationAccess,
+      isController: isController,
     );
   }
 
@@ -265,6 +275,7 @@ class MerkleKVConfig {
     ResourceLimits? resourceLimits,
     MqttSecurityConfig? mqttSecurity,
     required ReplicationAccess replicationAccess,
+    bool isController = false,
   }) {
     // Validate mqttHost
     if (mqttHost.trim().isEmpty) {
@@ -401,6 +412,7 @@ class MerkleKVConfig {
       resourceLimits: resourceLimits,
       mqttSecurity: mqttSecurity,
       replicationAccess: replicationAccess,
+      isController: isController,
     );
   }
 
@@ -438,6 +450,7 @@ class MerkleKVConfig {
     ResourceLimits? resourceLimits,
     MqttSecurityConfig? mqttSecurity,
     ReplicationAccess? replicationAccess,
+    bool? isController,
   }) {
     // If TLS setting changes but port is not specified, infer the port
     final newTlsSetting = mqttUseTls ?? this.mqttUseTls;
@@ -469,6 +482,7 @@ class MerkleKVConfig {
       resourceLimits: resourceLimits ?? this.resourceLimits,
       mqttSecurity: mqttSecurity ?? this.mqttSecurity,
       replicationAccess: replicationAccess ?? this.replicationAccess,
+      isController: isController ?? this.isController,
     );
   }
 
@@ -501,6 +515,7 @@ class MerkleKVConfig {
       'resourceLimits': resourceLimits?.toJson(),
       'mqttSecurity': mqttSecurity?.toJson(),
       'replicationAccess': replicationAccess.name,
+      'isController': isController,
     };
   }
 
@@ -514,6 +529,7 @@ class MerkleKVConfig {
     String? password,
     String? clientKeyPassword,
     ReplicationAccess replicationAccess = ReplicationAccess.readWrite,
+    bool isController = false,
   }) {
     // Parse optional MQTT security configuration (secrets provided via args)
     final secJson = json['mqttSecurity'] as Map<String, dynamic>?;
@@ -569,6 +585,7 @@ class MerkleKVConfig {
             ),
       mqttSecurity: security,
       replicationAccess: replicationAccess,
+      isController: isController,
     );
   }
 
@@ -602,6 +619,7 @@ class MerkleKVConfig {
         'resourceLimits: ${resourceLimits?.toString()}, '
         'mqttSecurity: ${mqttSecurity?.toJson()}'
         ', replicationAccess: ${replicationAccess.name}'
+        ', isController: $isController'
         '}';
   }
 }

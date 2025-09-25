@@ -12,10 +12,18 @@ When using the canonical topic scheme with prefix "merkle_kv", the TopicRouter p
 |------|---------|
 | 300  | Command publish denied (cross-client under canonical prefix) |
 | 301  | Replication publish denied (client not granted write access) |
+| 302  | Response subscription denied (cross-client without controller role) |
 
 ### Metrics
 
-`TopicRouter.authzMetrics` exposes simple counters for authorization decisions (allow/deny) for command and replication publishes. These are local to the router instance and intended for lightweight diagnostics.
+`TopicRouter.authzMetrics` exposes counters: commandAllowed/Denied, replicationAllowed/Denied, responseSubscribeAllowed/Denied. Use `publishAuthzMetrics()` to push a snapshot JSON to `<prefix>/metrics/authz` (canonical only).
+
+### Controller Role
+
+Set `isController: true` in `MerkleKVConfig` to allow:
+* Cross-client command publishes.
+* Subscribing to other clients' response topics via `subscribeToResponsesOf(clientId, handler)`.
+Non-controller devices are limited to self for these operations.
 
 Replication access levels (client-side pre-check):
 

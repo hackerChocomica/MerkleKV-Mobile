@@ -7,6 +7,8 @@ class TopicAuthzMetrics {
   int commandDenied = 0;
   int replicationAllowed = 0;
   int replicationDenied = 0;
+  int responseSubscribeDenied = 0;
+  int responseSubscribeAllowed = 0;
 
   void reset() {
     commandAllowed = 0;
@@ -20,6 +22,8 @@ class TopicAuthzMetrics {
         'commandDenied': commandDenied,
         'replicationAllowed': replicationAllowed,
         'replicationDenied': replicationDenied,
+          'responseSubscribeAllowed': responseSubscribeAllowed,
+          'responseSubscribeDenied': responseSubscribeDenied,
       };
 
   @override

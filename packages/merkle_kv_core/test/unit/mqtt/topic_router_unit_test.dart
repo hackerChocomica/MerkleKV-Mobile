@@ -111,30 +111,71 @@ void main() {
     });
 
     group('Client-side topic authorization', () {
-      test('denies cross-client publish under canonical prefix', () async {
+      test('controller allows cross-client publish, non-controller denied', () async {
         final canonicalCfg = MerkleKVConfig.create(
           mqttHost: 'localhost',
           clientId: 'device-1',
           nodeId: 'node-1',
           topicPrefix: 'merkle_kv',
           replicationAccess: ReplicationAccess.readWrite,
-        );
+        ).copyWith(isController: false);
         final client = MockMqttClient();
         final canonicalRouter = TopicRouterImpl(canonicalCfg, client);
 
-        // Cross-client should throw ApiException (code 300)
+        // Non-controller cross-client should throw ApiException (code 300)
         expect(
           () => canonicalRouter.publishCommand('other-device', 'cmd'),
           throwsA(isA<ApiException>().having((e) => e.code, 'code', 300)),
         );
         expect(canonicalRouter.authzMetrics.commandDenied, 1);
 
-        // Self-target is allowed
+  // Self-target is allowed
         await canonicalRouter.publishCommand('device-1', 'cmd');
         expect(client.publishCalls, hasLength(1));
 
+  // Controller config
+  final controllerCfg = canonicalCfg.copyWith(isController: true);
+  final controllerClient = MockMqttClient();
+  final controllerRouter = TopicRouterImpl(controllerCfg, controllerClient);
+  await controllerRouter.publishCommand('other-device', 'cmd'); // allowed
+  expect(controllerRouter.authzMetrics.commandAllowed, 1);
+
+  await controllerRouter.dispose();
+  await controllerClient.dispose();
+
         await canonicalRouter.dispose();
         await client.dispose();
+      });
+
+      test('response subscription: controller can subscribe to others; device denied', () async {
+        final base = MerkleKVConfig.create(
+          mqttHost: 'localhost',
+          clientId: 'device-A',
+          nodeId: 'node-A',
+          topicPrefix: 'merkle_kv',
+          replicationAccess: ReplicationAccess.readWrite,
+        ).copyWith(isController: false);
+        final clientA = MockMqttClient();
+        final routerA = TopicRouterImpl(base, clientA);
+
+        // Denied attempt (subscribe to device-B responses)
+        expect(
+          () => routerA.subscribeToResponsesOf('device-B', (_, __) {}),
+          throwsA(isA<ApiException>().having((e) => e.code, 'code', 302)),
+        );
+        expect(routerA.authzMetrics.responseSubscribeDenied, 1);
+
+        // Controller allowed
+        final controllerCfg = base.copyWith(isController: true, clientId: 'controller-1');
+        final controllerClient = MockMqttClient();
+        final controllerRouter = TopicRouterImpl(controllerCfg, controllerClient);
+        await controllerRouter.subscribeToResponsesOf('device-B', (_, __) {});
+        expect(controllerRouter.authzMetrics.responseSubscribeAllowed, 1);
+
+        await controllerRouter.dispose();
+        await controllerClient.dispose();
+        await routerA.dispose();
+        await clientA.dispose();
       });
 
       test('does not restrict non-canonical prefixes', () async {
