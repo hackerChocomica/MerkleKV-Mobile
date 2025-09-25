@@ -1,4 +1,4 @@
-import 'dart:io';
+  import 'dart:io';
 
 import 'invalid_config_exception.dart';
 import '../mqtt/topic_validator.dart';
@@ -6,6 +6,7 @@ import '../mqtt/topic_validator.dart';
 import '../utils/battery_awareness.dart';
 import 'resource_limits.dart';
 import 'mqtt_security_config.dart';
+import '../mqtt/topic_permissions.dart';
 
 /// Centralized, immutable configuration for MerkleKV Mobile client.
 ///
@@ -87,6 +88,14 @@ class MerkleKVConfig {
   /// Optional MQTT security configuration (TLS and authentication details).
   final MqttSecurityConfig? mqttSecurity;
 
+  /// Replication topic access level (authorization scope for canonical prefix).
+  final ReplicationAccess replicationAccess;
+
+  /// Whether this client acts as a privileged controller (may publish
+  /// cross-client commands under canonical prefix and subscribe to other
+  /// clients' responses for orchestration / debugging).
+  final bool isController;
+
   /// Static security warning handler for non-TLS credential usage.
   static void Function(String message)? _onSecurityWarning;
 
@@ -110,6 +119,8 @@ class MerkleKVConfig {
     required this.batteryConfig,
     required this.resourceLimits,
     required this.mqttSecurity,
+    required this.replicationAccess,
+    this.isController = false,
   });
 
   /// Creates a new MerkleKVConfig with validation and default values.
@@ -135,6 +146,8 @@ class MerkleKVConfig {
     BatteryAwarenessConfig? batteryConfig,
     ResourceLimits? resourceLimits,
     MqttSecurityConfig? mqttSecurity,
+    ReplicationAccess replicationAccess = ReplicationAccess.readWrite,
+    bool isController = false,
   }) {
     return MerkleKVConfig._validated(
       mqttHost: mqttHost,
@@ -155,6 +168,8 @@ class MerkleKVConfig {
       batteryConfig: batteryConfig ?? const BatteryAwarenessConfig(),
       resourceLimits: resourceLimits,
       mqttSecurity: mqttSecurity,
+      replicationAccess: replicationAccess,
+      isController: isController,
     );
   }
 
@@ -167,6 +182,8 @@ class MerkleKVConfig {
     required String nodeId,
     bool tls = false,
     BatteryAwarenessConfig? batteryConfig,
+    ReplicationAccess replicationAccess = ReplicationAccess.readWrite,
+    bool isController = false,
   }) {
     return MerkleKVConfig(
       mqttHost: host,
@@ -174,6 +191,8 @@ class MerkleKVConfig {
       clientId: clientId,
       nodeId: nodeId,
       batteryConfig: batteryConfig,
+      replicationAccess: replicationAccess,
+      isController: isController,
     );
   }
 
@@ -202,6 +221,7 @@ class MerkleKVConfig {
     BatteryAwarenessConfig? batteryConfig,
     ResourceLimits? resourceLimits,
     MqttSecurityConfig? mqttSecurity,
+    ReplicationAccess replicationAccess = ReplicationAccess.readWrite,
   }) {
     // Auto-supply temp storage path if persistence enabled but no path provided
     String? resolvedStoragePath = storagePath;
@@ -230,6 +250,7 @@ class MerkleKVConfig {
       batteryConfig: batteryConfig ?? const BatteryAwarenessConfig(),
       resourceLimits: resourceLimits,
       mqttSecurity: mqttSecurity,
+      replicationAccess: replicationAccess,
     );
   }
 
@@ -253,6 +274,8 @@ class MerkleKVConfig {
     required BatteryAwarenessConfig batteryConfig,
     ResourceLimits? resourceLimits,
     MqttSecurityConfig? mqttSecurity,
+    required ReplicationAccess replicationAccess,
+    bool isController = false,
   }) {
     // Validate mqttHost
     if (mqttHost.trim().isEmpty) {
@@ -388,6 +411,8 @@ class MerkleKVConfig {
       batteryConfig: batteryConfig,
       resourceLimits: resourceLimits,
       mqttSecurity: mqttSecurity,
+      replicationAccess: replicationAccess,
+      isController: isController,
     );
   }
 
@@ -424,6 +449,8 @@ class MerkleKVConfig {
     BatteryAwarenessConfig? batteryConfig,
     ResourceLimits? resourceLimits,
     MqttSecurityConfig? mqttSecurity,
+    ReplicationAccess? replicationAccess,
+    bool? isController,
   }) {
     // If TLS setting changes but port is not specified, infer the port
     final newTlsSetting = mqttUseTls ?? this.mqttUseTls;
@@ -454,6 +481,8 @@ class MerkleKVConfig {
       batteryConfig: batteryConfig ?? this.batteryConfig,
       resourceLimits: resourceLimits ?? this.resourceLimits,
       mqttSecurity: mqttSecurity ?? this.mqttSecurity,
+      replicationAccess: replicationAccess ?? this.replicationAccess,
+      isController: isController ?? this.isController,
     );
   }
 
@@ -485,6 +514,8 @@ class MerkleKVConfig {
       },
       'resourceLimits': resourceLimits?.toJson(),
       'mqttSecurity': mqttSecurity?.toJson(),
+      'replicationAccess': replicationAccess.name,
+      'isController': isController,
     };
   }
 
@@ -497,6 +528,8 @@ class MerkleKVConfig {
     String? username,
     String? password,
     String? clientKeyPassword,
+    ReplicationAccess replicationAccess = ReplicationAccess.readWrite,
+    bool isController = false,
   }) {
     // Parse optional MQTT security configuration (secrets provided via args)
     final secJson = json['mqttSecurity'] as Map<String, dynamic>?;
@@ -551,6 +584,8 @@ class MerkleKVConfig {
               (json['resourceLimits'] as Map).cast<String, dynamic>(),
             ),
       mqttSecurity: security,
+      replicationAccess: replicationAccess,
+      isController: isController,
     );
   }
 
@@ -583,6 +618,8 @@ class MerkleKVConfig {
           'reduceBackgroundActivity: ${batteryConfig.reduceBackgroundActivity}), '
         'resourceLimits: ${resourceLimits?.toString()}, '
         'mqttSecurity: ${mqttSecurity?.toJson()}'
+        ', replicationAccess: ${replicationAccess.name}'
+        ', isController: $isController'
         '}';
   }
 }

@@ -106,6 +106,7 @@ class MockMqttClient implements MqttClientInterface {
     String payload, {
     bool forceQoS1 = true,
     bool forceRetainFalse = true,
+    bool? retain,
   }) async {
     _publishCalls.add('$topic:$payload');
   }

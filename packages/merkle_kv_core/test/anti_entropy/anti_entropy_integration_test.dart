@@ -32,11 +32,15 @@ class MockMqttClient implements MqttClientInterface {
   final StreamController<ConnectionState> _connectionStateController = StreamController.broadcast();
   final Map<String, void Function(String, String)> _subscriptionHandlers = {};
   bool _isConnected = false;
+  final StreamController<String> _subAckController = StreamController.broadcast();
 
   bool get isConnected => _isConnected;
 
   @override
   Stream<ConnectionState> get connectionState => _connectionStateController.stream;
+
+  @override
+  Stream<String> get onSubscribed => _subAckController.stream;
 
   @override
   ConnectionState get currentConnectionState =>
@@ -55,7 +59,7 @@ class MockMqttClient implements MqttClientInterface {
   }
 
   @override
-  Future<void> publish(String topic, String payload, {bool forceQoS1 = false, bool forceRetainFalse = false}) async {
+  Future<void> publish(String topic, String payload, {bool forceQoS1 = false, bool forceRetainFalse = false, bool? retain}) async {
     final message = MockMessage(topic: topic, payload: payload);
     publishedMessages.add(message);
     
@@ -67,6 +71,9 @@ class MockMqttClient implements MqttClientInterface {
   Future<void> subscribe(String topic, void Function(String, String) onMessage) async {
     _subscriptionHandlers[topic] = onMessage;
     MockMessageBroker.subscribe(topic, onMessage);
+    Future.microtask(() {
+      if (!_subAckController.isClosed) _subAckController.add(topic);
+    });
   }
 
   @override
@@ -83,6 +90,7 @@ class MockMqttClient implements MqttClientInterface {
     }
     _subscriptionHandlers.clear();
     _connectionStateController.close();
+    _subAckController.close();
   }
 }
 

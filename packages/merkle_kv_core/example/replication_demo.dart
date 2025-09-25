@@ -10,6 +10,9 @@ class MockMqttClient implements MqttClientInterface {
   Stream<ConnectionState> get connectionState => Stream.value(_state);
 
   @override
+  ConnectionState get currentConnectionState => _state;
+
+  @override
   Future<void> connect() async {
     _state = ConnectionState.connected;
     print('MQTT: Connected');
@@ -22,7 +25,7 @@ class MockMqttClient implements MqttClientInterface {
   }
 
   @override
-  Future<void> publish(String topic, String payload, {bool forceQoS1 = true, bool forceRetainFalse = true}) async {
+  Future<void> publish(String topic, String payload, {bool forceQoS1 = true, bool forceRetainFalse = true, bool? retain}) async {
     if (_state != ConnectionState.connected) {
       throw Exception('Not connected');
     }

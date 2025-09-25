@@ -25,6 +25,9 @@ class MqttClientImpl implements MqttClientInterface {
   final Map<String, List<void Function(String, String)>> _subscriptions = {};
   StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>?
     _updatesSubscription;
+  // Emits topic filters after broker SUBACK acknowledgment
+  final StreamController<String> _subAckController =
+      StreamController<String>.broadcast();
 
   ConnectionState _currentState = ConnectionState.disconnected;
   Timer? _reconnectTimer;
@@ -39,6 +42,9 @@ class MqttClientImpl implements MqttClientInterface {
   @override
   Stream<ConnectionState> get connectionState =>
       _connectionStateController.stream;
+
+  @override
+  Stream<String> get onSubscribed => _subAckController.stream;
 
   @override
   ConnectionState get currentConnectionState => _currentState;
@@ -353,12 +359,13 @@ class MqttClientImpl implements MqttClientInterface {
     String payload, {
     bool forceQoS1 = true,
     bool forceRetainFalse = true,
+    bool? retain,
   }) async {
     final message = _QueuedMessage(
       topic: topic,
       payload: payload,
       qos: forceQoS1 ? MqttQos.atLeastOnce : MqttQos.atMostOnce,
-      retain: forceRetainFalse ? false : true,
+      retain: retain ?? (forceRetainFalse ? false : true),
     );
 
     if (_currentState != ConnectionState.connected) {
@@ -398,13 +405,23 @@ class MqttClientImpl implements MqttClientInterface {
     String topic,
     void Function(String, String) handler,
   ) async {
-    final handlers =
-        _subscriptions.putIfAbsent(topic, () => <void Function(String, String)>[]);
-    handlers.add(handler);
+    final handlers = _subscriptions.putIfAbsent(
+      topic,
+      () => <void Function(String, String)>[],
+    );
+    // Prevent duplicate registrations of the exact same handler reference.
+    // This can occur if higher-level routers invoke subscribe during both
+    // initial connection and a restoration phase while the underlying client
+    // is already connected. Without this guard, the handler would be invoked
+    // multiple times per message after successive reconnect cycles.
+    final alreadyRegistered = handlers.contains(handler);
+    if (!alreadyRegistered) {
+      handlers.add(handler);
+    }
 
     if (_currentState == ConnectionState.connected) {
       // Only subscribe at broker level the first time this topic filter is added
-      if (handlers.length == 1) {
+      if (handlers.length == 1 || (!alreadyRegistered && handlers.length == 1)) {
         final subscription = _client.subscribe(topic, MqttQos.atLeastOnce);
 
         // Log warning if broker downgrades to QoS 0
@@ -431,8 +448,12 @@ class MqttClientImpl implements MqttClientInterface {
   /// Handle successful connection.
   void _onConnected() {
     _updateConnectionState(ConnectionState.connected);
-    // Attach updates listener once connected (updates may be null before connect)
-    _updatesSubscription ??= _client.updates?.listen(_onMessageReceived);
+    // Always (re)attach updates listener on each successful connection since
+    // the underlying mqtt_client may recreate its updates stream object after
+    // a disconnect. Retaining the old StreamSubscription would result in
+    // silently missing all subsequent publications after a reconnect.
+    _updatesSubscription?.cancel();
+    _updatesSubscription = _client.updates?.listen(_onMessageReceived);
     _reestablishSubscriptions();
     _flushMessageQueue();
   }
@@ -455,7 +476,10 @@ class MqttClientImpl implements MqttClientInterface {
 
   /// Handle subscription confirmation.
   void _onSubscribed(String topic) {
-    // Subscription confirmed
+    // Emit topic to acknowledgment stream for deterministic waiting.
+    if (!_subAckController.isClosed) {
+      _subAckController.add(topic);
+    }
   }
 
   /// Handle unsubscription confirmation.
@@ -540,6 +564,9 @@ class MqttClientImpl implements MqttClientInterface {
     await _updatesSubscription?.cancel();
     if (!_connectionStateController.isClosed) {
       await _connectionStateController.close();
+    }
+    if (!_subAckController.isClosed) {
+      await _subAckController.close();
     }
     _client.disconnect();
   }

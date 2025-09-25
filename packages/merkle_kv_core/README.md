@@ -151,6 +151,75 @@ final advanced = tlsConfig.copyWith(
 );
 ```
 
+### Deterministic Subscription Restoration (SUBACK‑Gated)
+
+When a client reconnects, previously subscribed topics must be re‑established **before** publishing code assumes routing is active. Relying on timing delays or immediate `subscribe()` returns is race‑prone because MQTT only guarantees a subscription once the broker sends a SUBACK.
+
+To make this deterministic, the MQTT abstraction exposes an `onSubscribed` broadcast stream emitting topic names as SUBACKs arrive. Higher‑level components (e.g. `TopicRouterImpl`) aggregate the set of topics that need restoration, issue subscriptions, then await acknowledgments (or a timeout) before resuming normal operation.
+
+Key properties:
+
+- `Stream<String> onSubscribed` (added to `MqttClientInterface`) fires once per successful broker acknowledgment.
+- Restoration waits for *all* pending topics or a configurable timeout (default ~750ms) to avoid indefinite hangs on a misbehaving broker.
+- Updates listener is reattached on every reconnect to prevent using a stale stream that silently drops messages.
+- Tests (see `response_subscription_restore_test.dart`) confirm messages published immediately after reconnect are delivered reliably.
+
+#### Example: Waiting for Restoration in Integration Code
+
+```dart
+// After reconnecting the underlying MQTT client:
+await mqttClient.connect();
+
+// Ask the topic router to restore and wait deterministically
+await topicRouter.waitForRestore(timeout: const Duration(seconds: 2));
+
+// Safe: responses / replication / command routes are active now
+await topicRouter.publishResponse('ready');
+```
+
+#### Custom Client Implementors
+
+If you implement your own `MqttClientInterface`, ensure:
+
+```dart
+final _subAckController = StreamController<String>.broadcast();
+
+@override
+Stream<String> get onSubscribed => _subAckController.stream;
+
+void _handleSubAck(String topic) {
+  if (!_subAckController.isClosed) _subAckController.add(topic);
+}
+
+Future<void> subscribe(String topic) async {
+  // Delegate to underlying library; register a callback that calls _handleSubAck
+}
+
+Future<void> dispose() async {
+  await _subAckController.close();
+}
+```
+
+#### Timeout Handling
+
+If not all topics acknowledge within the timeout window, the router logs a warning and proceeds with the subset that succeeded. Your application can choose to:
+
+1. Retry restoration for missing topics.
+2. Surface a degraded‑state metric / health signal.
+3. Trigger a reconnect cycle if critical subscriptions are absent.
+
+#### Why Not Blind Delays?
+
+Fixed delays either wait too long (hurting latency) or still race under load. SUBACK‑gated restoration is precise and fast under nominal conditions while still bounded under failure.
+
+#### Testing Strategy
+
+- Positive path: all SUBACKs received → completion future resolves quickly.
+- Lossy broker simulation: drop some SUBACKs → timeout path exercised, ensuring no deadlock.
+- Post‑reconnect publish immediately after `waitForRestore()` (response test) to assert zero message loss.
+
+---
+
 ### Anti-Entropy Synchronization
 
 ```dart

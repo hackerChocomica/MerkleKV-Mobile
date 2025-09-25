@@ -367,11 +367,16 @@ class BatteryAwarenessIntegrationTest {
 class MockMqttClient implements MqttClientInterface {
   final StreamController<ConnectionState> _stateController = 
       StreamController<ConnectionState>.broadcast();
+  final StreamController<String> _subAckController =
+      StreamController<String>.broadcast();
   
   ConnectionState _currentState = ConnectionState.disconnected;
   
   @override
   Stream<ConnectionState> get connectionState => _stateController.stream;
+
+  @override
+  Stream<String> get onSubscribed => _subAckController.stream;
   
   @override
   ConnectionState get currentConnectionState => _currentState;

@@ -135,12 +135,9 @@ Future<void> connectOrSkip(MqttClientInterface c, {
     }
     
   } on TimeoutException catch (e) {
-    if (require) fail('Connection timeout ($name): ${e.message}');
-    // runtime skip (return early, no fail)
-    return Future.value();
+    fail('Connection timeout ($name): ${e.message}');
   } catch (e) {
-    if (require) fail('Connection failed ($name): $e');
-    return Future.value();
+    fail('Connection failed ($name): $e');
   }
 }
 
@@ -284,13 +281,9 @@ void guardedTest(
       final a = await _getAssumptions();
       final require = Platform.environment['IT_REQUIRE_BROKER'] == '1';
 
-      // If broker not usable: either fail early (when required) or return early (runtime skip)
+      // If broker not usable: always fail explicitly (no silent runtime skip)
       if (!a.reachable || !a.connectable) {
-        if (require) {
-          fail('Broker required for integration tests: ${a.reasonIfSkip}');
-        }
-        // Runtime skip: do not fail, do not hang
-        return;
+        fail('Integration broker unavailable: ${a.reasonIfSkip}. Ensure docker-compose test stack is up (e.g. mosquitto-test). To exclude these tests run: dart test -x integration');
       }
 
       await body(a);

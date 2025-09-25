@@ -10,6 +10,8 @@ import 'package:merkle_kv_core/src/mqtt/topic_router.dart';
 class MockMqttClient implements MqttClientInterface {
   final StreamController<ConnectionState> _connectionStateController =
       StreamController<ConnectionState>.broadcast();
+  final StreamController<String> _subAckController =
+      StreamController<String>.broadcast();
 
   final List<String> subscribedTopics = [];
   final Map<String, void Function(String, String)> subscriptionHandlers = {};
@@ -18,6 +20,9 @@ class MockMqttClient implements MqttClientInterface {
   @override
   Stream<ConnectionState> get connectionState =>
       _connectionStateController.stream;
+
+  @override
+  Stream<String> get onSubscribed => _subAckController.stream;
 
   @override
   ConnectionState get currentConnectionState => ConnectionState.connected;
@@ -48,6 +53,9 @@ class MockMqttClient implements MqttClientInterface {
   ) async {
     subscribedTopics.add(topic);
     subscriptionHandlers[topic] = handler;
+    Future.microtask(() {
+      if (!_subAckController.isClosed) _subAckController.add(topic);
+    });
   }
 
   @override
@@ -62,6 +70,7 @@ class MockMqttClient implements MqttClientInterface {
     String payload, {
     bool forceQoS1 = true,
     bool forceRetainFalse = true,
+    bool? retain,
   }) async {
     publishCalls.add(
       PublishCall(
@@ -91,6 +100,7 @@ class MockMqttClient implements MqttClientInterface {
   /// Dispose mock resources
   Future<void> dispose() async {
     await _connectionStateController.close();
+    await _subAckController.close();
   }
 }
 

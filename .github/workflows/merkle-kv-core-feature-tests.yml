@@ -134,6 +134,7 @@ jobs:
           ./test/integration/convert_certs.sh
 
       - name: Start broker test environment (Mosquitto, HiveMQ, Toxiproxy)
+        id: start-brokers
         run: |
           set -euxo pipefail
           docker-compose -f "$DOCKER_COMPOSE_FILE" up -d mosquitto-test hivemq-test toxiproxy
@@ -174,6 +175,24 @@ jobs:
 
           echo "Container status:"
           docker-compose -f "$DOCKER_COMPOSE_FILE" ps
+
+      - name: Early single-broker auto-start (fallback path) for non-integration suites
+        if: ${{ matrix.suite != 'integration' && matrix.suite != 'all' }}
+        run: |
+          set -euxo pipefail
+          chmod +x scripts/start_test_broker.sh || true
+          # This will no-op if port already in use by full environment
+          ./scripts/start_test_broker.sh || true
+
+      - name: Broker mode smoke test
+        if: ${{ matrix.suite == 'integration' || matrix.suite == 'all' }}
+        working-directory: ${{ env.WORKING_DIR }}
+        env:
+          IT_REQUIRE_BROKER: 1
+        run: |
+          set -euxo pipefail
+          dart test test/integration/external_vs_embedded_broker_mode_test.dart -r compact --platform vm --compiler source
+          dart test test/integration/response_subscription_restore_test.dart -r compact --platform vm --compiler source
 
       - name: Prepare test workspace
         working-directory: ${{ env.WORKING_DIR }}
@@ -320,3 +339,6 @@ jobs:
         if: always()
         run: |
           docker-compose -f "$DOCKER_COMPOSE_FILE" down -v || true
+          # Also run conditional teardown for any auto-start single broker
+          chmod +x scripts/teardown_test_broker.sh || true
+          ./scripts/teardown_test_broker.sh || true
