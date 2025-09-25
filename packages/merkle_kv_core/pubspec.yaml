@@ -9,6 +9,8 @@ dependencies:
   mqtt_client: ^10.0.0
   cbor: ^6.0.0
   crypto: ^3.0.3
+  sqflite_common_ffi: ^2.3.0
+  path: ^1.8.3
 
 dev_dependencies:
   test: ^1.25.2

@@ -55,3 +55,9 @@ export 'src/merkle/merkle_tree.dart';
 // Utilities
 export 'src/utils/uuid_generator.dart';
 export 'src/utils/battery_awareness.dart';
+
+// Offline Operations
+export 'src/offline/types.dart';
+export 'src/offline/offline_operation_queue.dart';
+export 'src/offline/queue_storage_interface.dart';
+export 'src/offline/sqlite_queue_storage.dart';
