@@ -12,6 +12,7 @@ The integration test suite validates MerkleKV operations against real MQTT broke
 - **Mosquitto 2.0**: Primary broker with full TLS/ACL support
 - **HiveMQ Community Edition**: Secondary broker for compatibility testing
 - **Toxiproxy**: Network simulation and partition testing
+ - **Embedded Stub Broker (fallback)**: Lightweight in-process MQTT stub used ONLY when no real broker is reachable and the test environment hasn't explicitly required a real one. This guarantees tests never hang due to a missing broker while still allowing strict modes.
 
 ### Security Features
 - **TLS 1.2+**: Mandatory encryption with client certificate authentication
@@ -29,6 +30,41 @@ The integration test suite validates MerkleKV operations against real MQTT broke
 # Setup infrastructure only
 ./scripts/run_integration_tests.sh --setup-only
 ```
+
+### Deterministic Broker Startup (New)
+
+For fast local iteration or CI environments without Docker services pre-started, a deterministic helper is available:
+
+```bash
+# Start (or noop if already running) a basic Mosquitto on port 1883
+./scripts/start_test_broker.sh
+
+# Environment overrides
+BROKER_PORT=1884 COMPOSE_FILE=docker-compose.test.yml SERVICE_NAME=mosquitto-test ./scripts/start_test_broker.sh
+```
+
+Integration tests auto-handle broker availability via `TestBrokerHelper` with the following precedence:
+1. If something is already listening on the target port → use it.
+2. If `IT_DOCKER_START=1` → attempt `scripts/start_test_broker.sh` (idempotent) then re-check the port.
+3. If still unavailable and `IT_REQUIRE_BROKER=1` → FAIL fast (no embedded fallback allowed).
+4. Otherwise → start the in-process embedded stub broker for minimal connectivity so tests proceed.
+
+Environment flags:
+```
+IT_REQUIRE_BROKER=1      # Force real broker; error if not reachable
+IT_DOCKER_START=1         # Try to launch docker-compose.basic.yml mosquitto-test automatically
+IT_BROKER_PORT=1883       # Override port (default 1883)
+IT_BROKER_START_TIMEOUT=30# Seconds to wait for docker startup (default 25)
+MKV_PROJECT_ROOT=/path    # Explicit project root (auto-inferred otherwise)
+```
+
+Recommended CI invocation ensuring a real broker:
+```bash
+IT_DOCKER_START=1 IT_REQUIRE_BROKER=1 ./scripts/start_test_broker.sh
+IT_REQUIRE_BROKER=1 dart test packages/merkle_kv_core/test/integration/authz_controller_integration_test.dart
+```
+
+This approach eliminates flaky connection timeouts and enforces explicit failure instead of silent skips.
 
 ## Test Suites
 
