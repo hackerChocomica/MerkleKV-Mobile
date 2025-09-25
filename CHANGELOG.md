@@ -13,6 +13,37 @@ Specification v1.0 compliance.
 - Additional MQTT broker compatibility testing
 - Flutter web support investigation
 
+### Added
+- **Retained Publish Support (Selective)**: Added retained flag across internal publish paths used strictly for broker mode detection. Normal application data traffic remains `retain=false`, preserving Locked Spec constraints while enabling deterministic external vs embedded broker capability probing.
+- **Deterministic Subscription Restoration**: Introduced SUBACK‑gated restoration flow. `TopicRouter` now waits for per-topic SUBACK acknowledgments (via new `onSubscribed` stream) before signaling restoration complete, eliminating race conditions where early publishes could arrive before subscriptions became active.
+- **`onSubscribed` Acknowledgment Stream**: New public stream on MQTT client abstraction emitting topic strings upon SUBACK; facilitates precise synchronization for tests and internal recovery logic.
+- **Test Coverage**: Added `response_subscription_restore_test` validating that responses published during a disconnect window are received after reconnection once restoration completes; added broker mode detection integration test leveraging retained messages.
+
+### Fixed
+- **Lost Post-Reconnect Messages**: Resolved race where first response after reconnect (e.g. `r2`) was occasionally missed due to subscription restoration completing after publishes. Now gated on SUBACK events with timeout fallback.
+- **Stale Updates Listener**: Ensured MQTT updates listener is always reattached on each successful connection to prevent silent message drops after reconnect sequences.
+
+### Changed
+- **Subscription Restoration Semantics**: Restoration now defined as ALL prior topics having received SUBACK (or timed out) rather than merely re-issuing subscribe calls. Adds determinism for higher-level components and tests.
+
+### Documentation
+- Added README section: “Deterministic Subscription Restoration (SUBACK‑Gated)” describing rationale, flow, and timeout behavior.
+
+### 🧪 Testing
+- Full test suite (703 tests) updated; all mocks implement new `onSubscribed` interface.
+- Added deterministic waits (`waitForRestore()`) in integration tests to avoid arbitrary delays.
+
+### 🔒 Locked Spec v1.0 Compliance
+- Core constraints (QoS=1, retain=false for application data, size/time limits) remain intact.
+- Retained usage is narrowly scoped to broker capability detection and is not used for replication/event payloads, preserving wire compatibility and determinism.
+
+### Migration Notes
+- Consumers using custom test doubles for the MQTT client must implement the new `onSubscribed` stream (can emit synchronously upon `subscribe()` for simple cases).
+- No breaking method signature removals; addition is backward compatible for clients that ignore the new stream.
+
+### Performance Impact
+- Negligible: SUBACK wait introduces microsecond-to-millisecond latency only during restoration; normal steady-state publish/subscribe path unchanged.
+
 ## [1.0.0-beta.1] - 2024-09-17
 
 ### Added - CI/CD Build System & Production Readiness
