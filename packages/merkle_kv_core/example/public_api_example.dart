@@ -10,13 +10,13 @@ Future<void> main() async {
 
   // 1. Create configuration using the builder pattern
   print('1. Creating configuration...');
-  // Note: The builder() API was removed; use the validated constructor instead.
-  final config = MerkleKVConfig(
-    mqttHost: 'test.mosquitto.org',
-    clientId: 'example-mobile-client',
-    nodeId: 'example-node-123',
-    topicPrefix: 'merkle_kv_example',
-  );
+  final config = MerkleKVConfig.builder()
+    .host('test.mosquitto.org')
+    .clientId('example-mobile-client')
+    .nodeId('example-node-123')
+    .topicPrefix('merkle_kv_example')
+    .mobileDefaults() // Apply mobile-optimized settings
+    .build();
 
   print('   Configuration created successfully');
   print('   Host: ${config.mqttHost}');

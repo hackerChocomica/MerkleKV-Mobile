@@ -21,7 +21,6 @@ class TestTimings {
 /// Mock MQTT client for testing.
 class MockMqttClient implements MqttClientInterface {
   StreamController<ConnectionState>? _stateController;
-  final StreamController<String> _subAckController = StreamController<String>.broadcast();
   
   ConnectionState _currentState = ConnectionState.disconnected;
   final List<String> _subscriptions = [];
@@ -51,9 +50,6 @@ class MockMqttClient implements MqttClientInterface {
     }
     return _stateController!.stream;
   }
-
-  @override
-  Stream<String> get onSubscribed => _subAckController.stream;
 
   @override
   ConnectionState get currentConnectionState => _currentState;
@@ -123,7 +119,6 @@ class MockMqttClient implements MqttClientInterface {
     String payload, {
     bool forceQoS1 = true,
     bool forceRetainFalse = true,
-    bool? retain,
   }) async {
     _publishCalls.add('$topic:$payload');
   }
@@ -132,9 +127,6 @@ class MockMqttClient implements MqttClientInterface {
   Future<void> subscribe(String topic, void Function(String, String) handler) async {
     _subscriptions.add(topic);
     _handlers[topic] = handler;
-    Future.microtask(() {
-      if (!_subAckController.isClosed) _subAckController.add(topic);
-    });
   }
 
   @override
@@ -146,7 +138,6 @@ class MockMqttClient implements MqttClientInterface {
   void dispose() {
     _stateController?.close();
     _stateController = null;
-    _subAckController.close();
   }
 
   void reset() {
@@ -161,9 +152,6 @@ class MockMqttClient implements MqttClientInterface {
     _handlers.clear();
     _currentState = ConnectionState.disconnected;
     _initializeController();
-    if (_subAckController.isClosed) {
-      // Cannot reopen; in tests we typically create a new instance instead.
-    }
   }
 }
 

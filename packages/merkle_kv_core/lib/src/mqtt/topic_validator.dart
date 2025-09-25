@@ -170,11 +170,6 @@ class TopicValidator {
   static String buildCommandTopic(String prefix, String targetClientId) {
     return buildTopic(prefix, targetClientId, TopicType.command);
   }
-
-  /// Builds a response topic for the target client: {prefix}/{clientId}/res
-  static String buildResponseTopic(String prefix, String targetClientId) {
-    return buildTopic(prefix, targetClientId, TopicType.response);
-  }
   
   /// Normalizes a raw prefix by trimming whitespace and removing slashes.
   ///
