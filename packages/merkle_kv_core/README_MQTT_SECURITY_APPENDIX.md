@@ -6,6 +6,16 @@ When using the canonical topic scheme with prefix "merkle_kv", the TopicRouter p
 - Attempts to publish commands to other clients under the canonical prefix will throw an ApiException with code 300 (authorization error)
 - Response and replication publishes are unaffected
 
+Replication access levels (client-side pre-check):
+
+| replicationAccess | Can publish replication? | Error code on deny |
+|-------------------|--------------------------|--------------------|
+| none              | No                       | 301                |
+| read              | No (read-only)           | 301                |
+| readWrite         | Yes                      | n/a                |
+
+Add `replicationAccess` to `MerkleKVConfig` (default: readWrite) to control client ability to publish replication events under canonical scheme. Broker ACLs must still enforce server-side policy.
+
 This mirrors the recommended broker ACLs and reduces noisy broker denials. For non-canonical prefixes (e.g., tests like "test_mkv"), no client-side restriction is applied.
 
 Recommended Mosquitto ACL patterns for canonical scheme:

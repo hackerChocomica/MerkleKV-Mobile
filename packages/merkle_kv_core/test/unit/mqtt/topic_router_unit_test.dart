@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:test/test.dart';
 import '../../../lib/src/mqtt/topic_router.dart';
 import '../../../lib/src/mqtt/topic_validator.dart';
+import '../../../lib/src/mqtt/topic_permissions.dart';
 import '../../../lib/src/mqtt/connection_state.dart';
 import '../../../lib/src/config/merkle_kv_config.dart';
 import '../../../lib/src/config/invalid_config_exception.dart';
@@ -115,6 +116,7 @@ void main() {
           clientId: 'device-1',
           nodeId: 'node-1',
           topicPrefix: 'merkle_kv',
+          replicationAccess: ReplicationAccess.readWrite,
         );
         final client = MockMqttClient();
         final canonicalRouter = TopicRouterImpl(canonicalCfg, client);
@@ -147,6 +149,64 @@ void main() {
         expect(client.publishCalls, hasLength(1));
 
         await nonCanonicalRouter.dispose();
+        await client.dispose();
+      });
+
+      test('denies replication publish when replicationAccess is none', () async {
+        final cfg = MerkleKVConfig.create(
+          mqttHost: 'localhost',
+          clientId: 'device-1',
+          nodeId: 'node-1',
+          topicPrefix: 'merkle_kv',
+          replicationAccess: ReplicationAccess.none,
+        );
+        final client = MockMqttClient();
+        final routerDenied = TopicRouterImpl(cfg, client);
+
+        expect(
+          () => routerDenied.publishReplication('evt'),
+          throwsA(isA<ApiException>().having((e) => e.code, 'code', 301)),
+        );
+
+        await routerDenied.dispose();
+        await client.dispose();
+      });
+
+      test('denies replication publish when replicationAccess is read (read-only)', () async {
+        final cfg = MerkleKVConfig.create(
+          mqttHost: 'localhost',
+          clientId: 'device-1',
+          nodeId: 'node-1',
+          topicPrefix: 'merkle_kv',
+          replicationAccess: ReplicationAccess.read,
+        );
+        final client = MockMqttClient();
+        final routerDenied = TopicRouterImpl(cfg, client);
+
+        expect(
+          () => routerDenied.publishReplication('evt'),
+          throwsA(isA<ApiException>().having((e) => e.code, 'code', 301)),
+        );
+
+        await routerDenied.dispose();
+        await client.dispose();
+      });
+
+      test('allows replication publish when replicationAccess is readWrite', () async {
+        final cfg = MerkleKVConfig.create(
+          mqttHost: 'localhost',
+          clientId: 'device-1',
+          nodeId: 'node-1',
+          topicPrefix: 'merkle_kv',
+          replicationAccess: ReplicationAccess.readWrite,
+        );
+        final client = MockMqttClient();
+        final routerAllowed = TopicRouterImpl(cfg, client);
+
+        await routerAllowed.publishReplication('evt');
+        expect(client.publishCalls, hasLength(1));
+
+        await routerAllowed.dispose();
         await client.dispose();
       });
     });

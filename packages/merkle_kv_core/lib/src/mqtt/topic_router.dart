@@ -7,6 +7,7 @@ import 'connection_state.dart';
 import 'mqtt_client_interface.dart';
 import 'topic_scheme.dart';
 import 'topic_validator.dart';
+import 'topic_permissions.dart';
 
 /// Abstract interface for topic-based message routing.
 ///
@@ -22,6 +23,11 @@ abstract class TopicRouter {
   ///
   /// [handler] - Callback function (topic, payload) => void
   Future<void> subscribeToReplication(void Function(String, String) handler);
+
+  /// Subscribe to response messages for this client.
+  ///
+  /// [handler] - Callback function (topic, payload) => void
+  Future<void> subscribeToResponses(void Function(String, String) handler);
 
   /// Publish a command message to target client.
   ///
@@ -52,9 +58,11 @@ class TopicRouterImpl implements TopicRouter {
   final TopicScheme _topicScheme;
   // Enforce client-side authz for canonical scheme (prefix 'merkle_kv')
   final bool _enforceAuthz;
+  final TopicPermissions _permissions;
 
   // Active subscription handlers
   void Function(String, String)? _commandHandler;
+  void Function(String, String)? _responseHandler;
   void Function(String, String)? _replicationHandler;
 
   // Connection state monitoring
@@ -63,7 +71,11 @@ class TopicRouterImpl implements TopicRouter {
   /// Creates a TopicRouter with the provided configuration and MQTT client.
   TopicRouterImpl(MerkleKVConfig config, this._mqttClient)
     : _topicScheme = TopicScheme.create(config.topicPrefix, config.clientId),
-      _enforceAuthz = TopicValidator.normalizePrefix(config.topicPrefix) == 'merkle_kv' {
+      _enforceAuthz = TopicValidator.normalizePrefix(config.topicPrefix) == 'merkle_kv',
+      _permissions = TopicPermissions(
+        clientId: config.clientId,
+        replicationAccess: config.replicationAccess,
+      ) {
     _initializeConnectionMonitoring();
   }
 
@@ -89,6 +101,16 @@ class TopicRouterImpl implements TopicRouter {
       await _mqttClient.subscribe(_topicScheme.commandTopic, _commandHandler!);
       developer.log(
         'Restored command subscription: ${_topicScheme.commandTopic}',
+        name: 'TopicRouter',
+        level: 800, // INFO
+      );
+    }
+
+    // Re-subscribe to responses if handler is active
+    if (_responseHandler != null) {
+      await _mqttClient.subscribe(_topicScheme.responseTopic, _responseHandler!);
+      developer.log(
+        'Restored response subscription: ${_topicScheme.responseTopic}',
         name: 'TopicRouter',
         level: 800, // INFO
       );
@@ -137,9 +159,23 @@ class TopicRouterImpl implements TopicRouter {
   }
 
   @override
+  Future<void> subscribeToResponses(
+    void Function(String, String) handler,
+  ) async {
+    _responseHandler = handler;
+    await _mqttClient.subscribe(_topicScheme.responseTopic, handler);
+
+    developer.log(
+      'Subscribed to responses: ${_topicScheme.responseTopic}',
+      name: 'TopicRouter',
+      level: 800, // INFO
+    );
+  }
+
+  @override
   Future<void> publishCommand(String targetClientId, String payload) async {
     // Client-side authorization: in canonical scheme, prevent cross-client publishes
-    _assertCanPublishToTarget(targetClientId);
+  _assertCanPublishCommand(targetClientId);
 
     // Use TopicValidator for enhanced validation and consistent topic building
     final targetTopic = TopicValidator.buildCommandTopic(
@@ -170,15 +206,12 @@ class TopicRouterImpl implements TopicRouter {
   ///   broker ACLs). We reflect that policy locally to fail fast.
   /// - For non-canonical prefixes (tests, custom setups), no client-side
   ///   restriction is applied.
-  void _assertCanPublishToTarget(String targetClientId) {
-    if (!_enforceAuthz) return;
-    // Allow self-targeting publishes (loopback/testing scenarios)
-    if (targetClientId == _topicScheme.clientId) return;
-
-    // Deny cross-client command publishes under canonical scheme
+  void _assertCanPublishCommand(String targetClientId) {
+    if (!_enforceAuthz) return; // Non-canonical prefix: no client-side restriction
+    if (_permissions.canPublishCommand(targetClientId)) return;
     throw ApiException(
       300,
-      'Not authorized to publish commands to other clients under canonical topic scheme',
+      'Not authorized to publish commands to $targetClientId (canonical scheme requires self-only command publish)',
     );
   }
 
@@ -200,6 +233,12 @@ class TopicRouterImpl implements TopicRouter {
 
   @override
   Future<void> publishReplication(String payload) async {
+    if (_enforceAuthz && !_permissions.canPublishReplication()) {
+      throw ApiException(
+        301,
+        'Not authorized to publish replication events (replicationAccess=${_permissions.replicationAccess})',
+      );
+    }
     await _mqttClient.publish(
       _topicScheme.replicationTopic,
       payload,
@@ -219,6 +258,7 @@ class TopicRouterImpl implements TopicRouter {
     await _connectionSubscription?.cancel();
     _connectionSubscription = null;
     _commandHandler = null;
+  _responseHandler = null;
     _replicationHandler = null;
 
     developer.log(
