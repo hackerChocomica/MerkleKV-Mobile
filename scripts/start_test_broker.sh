@@ -1,3 +1,7 @@
+# Deterministic startup for a local Mosquitto test broker.
+# Additionally creates a marker file .broker_auto_started so teardown script
+# can decide whether to remove the container.
+MARKER_FILE=".broker_auto_started"
 #!/usr/bin/env bash
 # Deterministic startup for a local Mosquitto test broker.
 # Intended for CI or local dev when integration tests need a real broker
@@ -44,6 +48,7 @@ fi
 if (command -v nc >/dev/null 2>&1 && nc -z localhost "$BROKER_PORT" 2>/dev/null) || \
    (timeout 1 bash -c ">/dev/tcp/127.0.0.1/${BROKER_PORT}" 2>/dev/null); then
   ok "Broker already listening on port ${BROKER_PORT} (skipping start)."
+  # Do not create marker if we didn't start it.
   exit 0
 fi
 
@@ -54,7 +59,8 @@ elapsed=0
 while [ "$elapsed" -lt "$START_TIMEOUT" ]; do
   if (command -v nc >/dev/null 2>&1 && nc -z localhost "$BROKER_PORT" 2>/dev/null) || \
      (timeout 1 bash -c ">/dev/tcp/127.0.0.1/${BROKER_PORT}" 2>/dev/null); then
-    ok "Broker port ${BROKER_PORT} is accepting connections after ${elapsed}s."
+  ok "Broker port ${BROKER_PORT} is accepting connections after ${elapsed}s."
+  echo "${SERVICE_NAME}" > "${MARKER_FILE}" || true
     # Optional health check using mosquitto_sub if present
     if command -v mosquitto_sub >/dev/null 2>&1; then
       # Probe the $SYS uptime topic (escaped so shell doesn't expand $S)
