@@ -8,6 +8,7 @@ import 'mqtt_client_interface.dart';
 import 'topic_scheme.dart';
 import 'topic_validator.dart';
 import 'topic_permissions.dart';
+import 'topic_authz_metrics.dart';
 
 /// Abstract interface for topic-based message routing.
 ///
@@ -47,6 +48,9 @@ abstract class TopicRouter {
 
   /// Dispose resources and clean up subscriptions.
   Future<void> dispose();
+
+  /// Authorization metrics (allow/deny counters) for diagnostics.
+  TopicAuthzMetrics get authzMetrics;
 }
 
 /// Default implementation of [TopicRouter] using MQTT client.
@@ -59,6 +63,7 @@ class TopicRouterImpl implements TopicRouter {
   // Enforce client-side authz for canonical scheme (prefix 'merkle_kv')
   final bool _enforceAuthz;
   final TopicPermissions _permissions;
+  final TopicAuthzMetrics _metrics = TopicAuthzMetrics();
 
   // Active subscription handlers
   void Function(String, String)? _commandHandler;
@@ -175,7 +180,7 @@ class TopicRouterImpl implements TopicRouter {
   @override
   Future<void> publishCommand(String targetClientId, String payload) async {
     // Client-side authorization: in canonical scheme, prevent cross-client publishes
-  _assertCanPublishCommand(targetClientId);
+    _assertCanPublishCommand(targetClientId);
 
     // Use TopicValidator for enhanced validation and consistent topic building
     final targetTopic = TopicValidator.buildCommandTopic(
@@ -189,6 +194,8 @@ class TopicRouterImpl implements TopicRouter {
       forceQoS1: true,
       forceRetainFalse: true,
     );
+
+    if (_enforceAuthz) _metrics.commandAllowed++;
 
     developer.log(
       'Published command to $targetTopic (${payload.length} bytes)',
@@ -209,6 +216,7 @@ class TopicRouterImpl implements TopicRouter {
   void _assertCanPublishCommand(String targetClientId) {
     if (!_enforceAuthz) return; // Non-canonical prefix: no client-side restriction
     if (_permissions.canPublishCommand(targetClientId)) return;
+    _metrics.commandDenied++;
     throw ApiException(
       300,
       'Not authorized to publish commands to $targetClientId (canonical scheme requires self-only command publish)',
@@ -234,6 +242,7 @@ class TopicRouterImpl implements TopicRouter {
   @override
   Future<void> publishReplication(String payload) async {
     if (_enforceAuthz && !_permissions.canPublishReplication()) {
+      _metrics.replicationDenied++;
       throw ApiException(
         301,
         'Not authorized to publish replication events (replicationAccess=${_permissions.replicationAccess})',
@@ -245,6 +254,8 @@ class TopicRouterImpl implements TopicRouter {
       forceQoS1: true,
       forceRetainFalse: true,
     );
+
+    if (_enforceAuthz) _metrics.replicationAllowed++;
 
     developer.log(
       'Published replication to ${_topicScheme.replicationTopic} (${payload.length} bytes)',
@@ -267,4 +278,7 @@ class TopicRouterImpl implements TopicRouter {
       level: 800, // INFO
     );
   }
+
+  @override
+  TopicAuthzMetrics get authzMetrics => _metrics;
 }

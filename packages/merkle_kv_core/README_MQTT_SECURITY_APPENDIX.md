@@ -6,6 +6,17 @@ When using the canonical topic scheme with prefix "merkle_kv", the TopicRouter p
 - Attempts to publish commands to other clients under the canonical prefix will throw an ApiException with code 300 (authorization error)
 - Response and replication publishes are unaffected
 
+### Error Codes
+
+| Code | Meaning |
+|------|---------|
+| 300  | Command publish denied (cross-client under canonical prefix) |
+| 301  | Replication publish denied (client not granted write access) |
+
+### Metrics
+
+`TopicRouter.authzMetrics` exposes simple counters for authorization decisions (allow/deny) for command and replication publishes. These are local to the router instance and intended for lightweight diagnostics.
+
 Replication access levels (client-side pre-check):
 
 | replicationAccess | Can publish replication? | Error code on deny |

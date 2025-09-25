@@ -3,6 +3,7 @@ import 'package:test/test.dart';
 import '../../../lib/src/mqtt/topic_router.dart';
 import '../../../lib/src/mqtt/topic_validator.dart';
 import '../../../lib/src/mqtt/topic_permissions.dart';
+import '../../../lib/src/mqtt/topic_authz_metrics.dart';
 import '../../../lib/src/mqtt/connection_state.dart';
 import '../../../lib/src/config/merkle_kv_config.dart';
 import '../../../lib/src/config/invalid_config_exception.dart';
@@ -126,6 +127,7 @@ void main() {
           () => canonicalRouter.publishCommand('other-device', 'cmd'),
           throwsA(isA<ApiException>().having((e) => e.code, 'code', 300)),
         );
+        expect(canonicalRouter.authzMetrics.commandDenied, 1);
 
         // Self-target is allowed
         await canonicalRouter.publishCommand('device-1', 'cmd');
@@ -205,8 +207,39 @@ void main() {
 
         await routerAllowed.publishReplication('evt');
         expect(client.publishCalls, hasLength(1));
+        expect(routerAllowed.authzMetrics.replicationAllowed, 1);
 
         await routerAllowed.dispose();
+        await client.dispose();
+      });
+
+      test('metrics accumulate for multiple decisions', () async {
+        final cfg = MerkleKVConfig.create(
+          mqttHost: 'localhost',
+          clientId: 'device-1',
+          nodeId: 'node-1',
+          topicPrefix: 'merkle_kv',
+          replicationAccess: ReplicationAccess.none,
+        );
+        final client = MockMqttClient();
+        final router = TopicRouterImpl(cfg, client);
+
+        for (var i = 0; i < 2; i++) {
+          expect(
+            () => router.publishReplication('evt'),
+            throwsA(isA<ApiException>().having((e) => e.code, 'code', 301)),
+          );
+        }
+
+        expect(
+          () => router.publishCommand('other-device', 'cmd'),
+          throwsA(isA<ApiException>().having((e) => e.code, 'code', 300)),
+        );
+
+        expect(router.authzMetrics.replicationDenied, 2);
+        expect(router.authzMetrics.commandDenied, 1);
+
+        await router.dispose();
         await client.dispose();
       });
     });
