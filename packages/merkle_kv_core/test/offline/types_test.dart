@@ -1,6 +1,6 @@
 import 'package:test/test.dart';
 
-import '../../../lib/src/offline/types.dart';
+import '../../lib/src/offline/types.dart';
 
 /// Tests for offline queue types and data structures
 void main() {

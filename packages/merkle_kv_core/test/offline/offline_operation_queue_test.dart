@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:test/test.dart';
 
-import '../../../lib/src/commands/command.dart';
-import '../../../lib/src/offline/offline_operation_queue.dart';
-import '../../../lib/src/offline/queue_storage_interface.dart';
-import '../../../lib/src/offline/types.dart';
+import '../../lib/src/commands/command.dart';
+import '../../lib/src/offline/offline_operation_queue.dart';
+import '../../lib/src/offline/queue_storage_interface.dart';
+import '../../lib/src/offline/types.dart';
 
 /// Mock storage implementation for testing
 class MockQueueStorage implements QueueStorageInterface {
