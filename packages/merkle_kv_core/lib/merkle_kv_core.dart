@@ -9,6 +9,7 @@ export 'src/api/merkle_kv.dart';
 export 'src/api/exceptions.dart';
 export 'src/api/validation.dart';
 export 'src/api/config_builder.dart';
+export 'src/merkle_kv_mobile.dart';
 
 // Configuration
 export 'src/config/merkle_kv_config.dart';

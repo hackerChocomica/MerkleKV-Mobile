@@ -60,6 +60,37 @@ final config = MerkleKVConfig.builder()
   .build();
 ```
 
+#### Advanced builder options
+
+```dart
+import 'package:merkle_kv_core/merkle_kv_core.dart';
+
+final config = MerkleKVConfig.builder()
+  .host('secure-broker.example.com')
+  .clientId('app-instance-1')
+  .nodeId('mobile-device-1')
+  .security(
+    MqttSecurityConfig(
+      enableTLS: true,
+      minTLSVersion: TLSVersion.v1_2,
+      enforceHostnameValidation: true,
+      authMethod: AuthenticationMethod.usernamePassword,
+      username: '<from-keystore>',
+      password: '<from-keystore>',
+    ),
+  )
+  .battery(const BatteryAwarenessConfig(
+    lowBatteryThreshold: 20,
+    criticalBatteryThreshold: 10,
+    adaptiveKeepAlive: true,
+  ))
+  .resourceLimits(const ResourceLimits(
+    maxKeys: 100000,
+    maxValueBytes: 256 * 1024,
+  ))
+  .build();
+```
+
 ### Preset Configurations
 
 ```dart
