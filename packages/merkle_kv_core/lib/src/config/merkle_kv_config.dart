@@ -6,6 +6,10 @@ import '../mqtt/topic_validator.dart';
 import '../utils/battery_awareness.dart';
 import 'resource_limits.dart';
 import 'mqtt_security_config.dart';
+// Provide a static builder() on MerkleKVConfig without exposing a new public type name here.
+// Note: This introduces a benign import cycle with config_builder.dart; Dart supports cycles,
+// and we only reference the builder type for construction.
+import '../api/config_builder.dart' as config_builder;
 
 /// Centralized, immutable configuration for MerkleKV Mobile client.
 ///
@@ -111,6 +115,15 @@ class MerkleKVConfig {
     required this.resourceLimits,
     required this.mqttSecurity,
   });
+
+  /// Creates a new fluent builder for constructing a configuration.
+  ///
+  /// This method enables the README pattern:
+  /// `final config = MerkleKVConfig.builder().host(...).clientId(...).nodeId(...).build();`
+  ///
+  /// The builder applies sensible defaults and validates on [build()].
+  static config_builder.MerkleKVConfigBuilder builder() =>
+      config_builder.MerkleKVConfigBuilder();
 
   /// Creates a new MerkleKVConfig with validation and default values.
   ///

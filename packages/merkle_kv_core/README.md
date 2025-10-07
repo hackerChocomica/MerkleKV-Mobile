@@ -54,7 +54,7 @@ flutter pub get
 ```dart
 import 'package:merkle_kv_core/merkle_kv_core.dart';
 
-// Configure the client
+// Configure the client (constructor)
 final config = MerkleKVConfig(
   mqttHost: 'broker.example.com',
   nodeId: 'mobile-device-1',
@@ -69,6 +69,23 @@ await client.start();
 await client.set('user:123', 'Alice');
 final value = await client.get('user:123');
 await client.delete('user:123');
+```
+
+### Builder Pattern (recommended)
+
+```dart
+import 'package:merkle_kv_core/merkle_kv_core.dart';
+
+final config = MerkleKVConfig.builder()
+  .host('broker.example.com')
+  .clientId('app-instance-1')
+  .nodeId('mobile-device-1')
+  .enableTls() // optional
+  .mobileDefaults() // optional presets
+  .build();
+
+final client = MerkleKVMobile(config);
+await client.start();
 ```
 
 ### Multi-Tenant Configuration
@@ -107,12 +124,12 @@ final stagingConfig = MerkleKVConfig(
 ### Event Publishing
 
 ```dart
-// Enable replication event publishing
+// Replication event publishing is managed internally by the core engine.
+// No explicit enableReplication flag is required.
 final config = MerkleKVConfig(
   mqttHost: 'broker.example.com', 
   nodeId: 'mobile-device-1',
   clientId: 'app-instance-1',
-  enableReplication: true,
 );
 
 final client = MerkleKVMobile(config);

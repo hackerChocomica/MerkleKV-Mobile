@@ -2,6 +2,9 @@ import 'dart:io';
 
 import '../config/merkle_kv_config.dart';
 import '../config/invalid_config_exception.dart';
+import '../config/mqtt_security_config.dart';
+import '../config/resource_limits.dart';
+import '../utils/battery_awareness.dart';
 
 /// Builder class for creating MerkleKVConfig instances with a fluent API.
 ///
@@ -36,6 +39,9 @@ class MerkleKVConfigBuilder {
   int _tombstoneRetentionHours = 24;
   bool _persistenceEnabled = false;
   String? _storagePath;
+  BatteryAwarenessConfig? _batteryConfig;
+  ResourceLimits? _resourceLimits;
+  MqttSecurityConfig? _mqttSecurity;
 
   /// Sets the MQTT broker hostname or IP address.
   MerkleKVConfigBuilder host(String host) {
@@ -177,6 +183,27 @@ class MerkleKVConfigBuilder {
     return this;
   }
 
+  /// Configures battery-aware behaviors (mobile optimization knobs).
+  MerkleKVConfigBuilder battery(BatteryAwarenessConfig config) {
+    _batteryConfig = config;
+    return this;
+  }
+
+  /// Applies resource advisories (non-fatal soft limits).
+  MerkleKVConfigBuilder resourceLimits(ResourceLimits limits) {
+    _resourceLimits = limits;
+    return this;
+  }
+
+  /// Configures MQTT transport security (TLS, hostname validation, auth).
+  MerkleKVConfigBuilder security(MqttSecurityConfig security) {
+    _mqttSecurity = security;
+    // Keep legacy flags in sync when possible
+    _mqttUseTls = security.enableTLS;
+    _mqttPort ??= _mqttUseTls ? 8883 : 1883;
+    return this;
+  }
+
   /// Applies mobile-optimized defaults.
   /// 
   /// Sets appropriate timeouts and enables persistence for mobile usage.
@@ -287,6 +314,9 @@ class MerkleKVConfigBuilder {
       tombstoneRetentionHours: _tombstoneRetentionHours,
       persistenceEnabled: _persistenceEnabled,
       storagePath: resolvedStoragePath,
+      batteryConfig: _batteryConfig,
+      resourceLimits: _resourceLimits,
+      mqttSecurity: _mqttSecurity,
     );
   }
 

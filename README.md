@@ -7,13 +7,21 @@ A distributed key-value store optimized for mobile edge devices with MQTT-based 
 ```dart
 import 'package:merkle_kv_core/merkle_kv_core.dart';
 
-// 1. Configure
+// 1. Configure (constructor or builder)
 final config = MerkleKVConfig(
   mqttHost: 'broker.example.com',
   clientId: 'mobile-device-1',
   nodeId: 'unique-device-id',
   topicPrefix: 'myapp/production', // Multi-tenant support
 );
+
+// Or fluent builder (recommended)
+final built = MerkleKVConfig.builder()
+  .host('broker.example.com')
+  .clientId('mobile-device-1')
+  .nodeId('unique-device-id')
+  .topicPrefix('myapp/production')
+  .build();
 
 // 2. Initialize
 final client = MerkleKVMobile(config);
@@ -221,10 +229,9 @@ client.replicationEvents.listen((event) {
   print('Key ${event.key} changed to ${event.value}');
 });
 
-// Enable event publishing
+// Replication publishing is handled internally; no extra flag needed
 final config = MerkleKVConfig(
   // ... basic config
-  enableReplication: true,
 );
 ```
 
