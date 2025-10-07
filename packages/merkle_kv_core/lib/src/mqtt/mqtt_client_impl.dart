@@ -52,11 +52,9 @@ class MqttClientImpl implements MqttClientInterface {
     _client.autoReconnect = false; // We handle reconnection manually
     _client.logging(on: false); // Prevent credential logging
 
-    // TLS enforcement when credentials are present
-    if ((_config.username != null || _config.password != null) &&
-        !_config.mqttUseTls) {
-      throw ArgumentError('TLS must be enabled when credentials are provided');
-    }
+    // Previously enforced TLS when credentials were present. Per updated requirements,
+    // allow providing username/password over non-TLS connections as well.
+    // Security note: TLS is still strongly recommended in production.
 
     // Apply TLS/security configuration
     final sec = _config.mqttSecurity;
