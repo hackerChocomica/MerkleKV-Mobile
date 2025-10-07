@@ -52,11 +52,8 @@ class MqttClientImpl implements MqttClientInterface {
     _client.autoReconnect = false; // We handle reconnection manually
     _client.logging(on: false); // Prevent credential logging
 
-    // TLS enforcement when credentials are present
-    if ((_config.username != null || _config.password != null) &&
-        !_config.mqttUseTls) {
-      throw ArgumentError('TLS must be enabled when credentials are provided');
-    }
+    // Note: Credentials without TLS are allowed. Security warnings are
+    // emitted at configuration build time via MerkleKVConfig.
 
     // Apply TLS/security configuration
     final sec = _config.mqttSecurity;
@@ -184,8 +181,14 @@ class MqttClientImpl implements MqttClientInterface {
       });
 
       // Handle authentication
-      if (_config.username != null && _config.password != null) {
-        _client.connect(_config.username!, _config.password!).then((status) {
+      if (_config.username != null || _config.password != null) {
+        // Support username-only or password-only scenarios. The mqtt_client
+        // package accepts optional username/password; passing null for the
+        // missing field allows brokers that accept single-credential auth
+        // (e.g., token-only in password).
+        _client
+            .connect(_config.username, _config.password)
+            .then((status) {
           timeoutTimer?.cancel();
           if (!connectionCompleter.isCompleted) {
             connectionCompleter.complete(status);
