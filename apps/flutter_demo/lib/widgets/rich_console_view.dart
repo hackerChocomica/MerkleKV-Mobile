@@ -25,8 +25,10 @@ class _RichConsoleViewState extends State<RichConsoleView> {
   @override
   void initState() {
     super.initState();
-    // Seed with buffer snapshot for instant UI
-    _entries.addAll(widget.logger.bufferSnapshot);
+    // Seed with filtered buffer snapshot for instant UI
+    _entries.addAll(
+      widget.logger.bufferSnapshot.where(_matches),
+    );
   }
 
   @override
@@ -114,6 +116,38 @@ class _RichConsoleViewState extends State<RichConsoleView> {
         ),
       ],
     );
+  }
+
+  bool _matches(ConnectionLogEntry e) {
+    // Level filter
+    if (widget.levels != null && widget.levels!.isNotEmpty) {
+      if (!widget.levels!.contains(e.level)) return false;
+    }
+    // Tag filter
+    if (widget.tag != null && widget.tag!.isNotEmpty) {
+      if (e.tag != widget.tag) return false;
+    }
+    // Contains filter
+    if (widget.contains != null && widget.contains!.isNotEmpty) {
+      final hay = '${e.message} ${e.error ?? ''} ${e.stackTrace ?? ''}'.toLowerCase();
+      if (!hay.contains(widget.contains!.toLowerCase())) return false;
+    }
+    return true;
+  }
+
+  @override
+  void didUpdateWidget(covariant RichConsoleView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final levelsChanged = oldWidget.levels != widget.levels;
+    final tagChanged = oldWidget.tag != widget.tag;
+    final containsChanged = oldWidget.contains != widget.contains;
+    if (levelsChanged || tagChanged || containsChanged) {
+      setState(() {
+        _entries
+          ..clear()
+          ..addAll(widget.logger.bufferSnapshot.where(_matches));
+      });
+    }
   }
 
   Widget _buildEntry(ConnectionLogEntry e) {
