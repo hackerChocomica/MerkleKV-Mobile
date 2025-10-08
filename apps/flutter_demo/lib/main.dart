@@ -76,7 +76,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     children: const [
                       Icon(Icons.dashboard_customize, color: Colors.cyanAccent),
                       SizedBox(width: 8),
-                      Text('Live System Dashboard', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      Text('Live System Dashboard', style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -113,7 +113,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               children: const [
                                 Icon(Icons.terminal, color: Colors.greenAccent),
                                 SizedBox(width: 8),
-                                Text('Connection Log', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                Text('Connection Log', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                               ],
                             ),
                             const SizedBox(height: 8),
