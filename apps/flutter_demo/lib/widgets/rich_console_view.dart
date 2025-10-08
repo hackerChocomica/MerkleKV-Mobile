@@ -1,8 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:merkle_kv_core/src/mqtt/connection_logger.dart';
-import 'package:merkle_kv_core/src/mqtt/log_entry.dart';
+import 'package:merkle_kv_core/merkle_kv_core.dart';
 
 class RichConsoleView extends StatefulWidget {
   final StreamConnectionLogger logger;
