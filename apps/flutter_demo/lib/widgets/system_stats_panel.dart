@@ -238,48 +238,73 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
+    final cards = <Widget>[
+      _statCard(
+        color1: Colors.cyanAccent,
+        color2: Colors.tealAccent,
+        icon: Icons.memory,
+        title: 'Memory',
+        value: _formatMemUsage(),
+        progress: _stats.memUsagePercent != null ? (_stats.memUsagePercent! / 100.0) : null,
+      ),
+      _statCard(
+        color1: Colors.greenAccent,
+        color2: Colors.lightGreenAccent,
+        icon: Icons.speed,
+        title: 'CPU',
+        value: _stats.cpuPercent != null ? '${_stats.cpuPercent!.toStringAsFixed(1)} %' : 'N/A',
+        progress: _stats.cpuPercent != null ? (_stats.cpuPercent! / 100.0) : null,
+      ),
+      _statCard(
+        color1: Colors.deepPurpleAccent,
+        color2: Colors.purpleAccent,
+        icon: Icons.storage,
+        title: 'Storage',
+        value: _stats.storageUsedBytes != null ? _formatBytes(_stats.storageUsedBytes!) : 'N/A',
+        progress: null, // total unknown without platform APIs
+      ),
+      _statCard(
+        color1: Colors.orangeAccent,
+        color2: Colors.amberAccent,
+        icon: Icons.network_check,
+        title: 'Network',
+        value: _formatNetRate(),
+        progress: null,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final hasFiniteWidth = constraints.maxWidth.isFinite;
+        Widget rowWithSpacing(List<Widget> children) => Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (int i = 0; i < children.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: children[i],
+                  ),
+                ]
+              ],
+            );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _statCard(
-              color1: Colors.cyanAccent,
-              color2: Colors.tealAccent,
-              icon: Icons.memory,
-              title: 'Memory',
-              value: _formatMemUsage(),
-              progress: _stats.memUsagePercent != null ? (_stats.memUsagePercent! / 100.0) : null,
-            ),
-            _statCard(
-              color1: Colors.greenAccent,
-              color2: Colors.lightGreenAccent,
-              icon: Icons.speed,
-              title: 'CPU',
-              value: _stats.cpuPercent != null ? '${_stats.cpuPercent!.toStringAsFixed(1)} %' : 'N/A',
-              progress: _stats.cpuPercent != null ? (_stats.cpuPercent! / 100.0) : null,
-            ),
-            _statCard(
-              color1: Colors.deepPurpleAccent,
-              color2: Colors.purpleAccent,
-              icon: Icons.storage,
-              title: 'Storage',
-              value: _stats.storageUsedBytes != null ? _formatBytes(_stats.storageUsedBytes!) : 'N/A',
-              progress: null, // total unknown without platform APIs
-            ),
-            _statCard(
-              color1: Colors.orangeAccent,
-              color2: Colors.amberAccent,
-              icon: Icons.network_check,
-              title: 'Network',
-              value: _formatNetRate(),
-              progress: null,
-            ),
+            if (hasFiniteWidth)
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: cards,
+              )
+            else
+              // When width is unbounded (e.g., inside a horizontal scroller),
+              // prefer Row to avoid giving RenderWrap infinite width.
+              rowWithSpacing(cards),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 
