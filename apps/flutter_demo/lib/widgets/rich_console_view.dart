@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:merkle_kv_core/merkle_kv_core.dart';
 
@@ -22,24 +20,17 @@ class RichConsoleView extends StatefulWidget {
 }
 
 class _RichConsoleViewState extends State<RichConsoleView> {
-  late StreamSubscription<ConnectionLogEntry> _sub;
-  final List<ConnectionLogEntry> _entries = [];
+  final List<ConnectionLogEntry> _entries = <ConnectionLogEntry>[];
 
   @override
   void initState() {
     super.initState();
     // Seed with buffer snapshot for instant UI
     _entries.addAll(widget.logger.bufferSnapshot);
-    _sub = widget.logger
-        .filtered(levels: widget.levels, tag: widget.tag, contains: widget.contains)
-        .listen((e) {
-      setState(() => _entries.add(e));
-    });
   }
 
   @override
   void dispose() {
-    _sub.cancel();
     super.dispose();
   }
 
@@ -71,6 +62,12 @@ class _RichConsoleViewState extends State<RichConsoleView> {
 
   @override
   Widget build(BuildContext context) {
+    final logStream = widget.logger.filtered(
+      levels: widget.levels,
+      tag: widget.tag,
+      contains: widget.contains,
+    );
+
     return Column(
       children: [
         Row(
@@ -98,56 +95,98 @@ class _RichConsoleViewState extends State<RichConsoleView> {
               color: Colors.black,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: ListView.builder(
-              itemCount: _entries.length,
-              itemBuilder: (context, index) {
-                final e = _entries[index];
-                final ts = e.timestamp.toIso8601String();
-                final tag = e.tag != null ? ' [${e.tag}]' : '';
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  child: RichText(
-                    text: TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '$ts ',
-                          style: const TextStyle(color: Colors.white38, fontSize: 12),
-                        ),
-                        TextSpan(
-                          text: '${e.level} ',
-                          style: TextStyle(
-                            color: _levelColor(e.level),
-                            fontWeight: _levelWeight(e.level),
-                          ),
-                        ),
-                        TextSpan(
-                          text: tag,
-                          style: const TextStyle(color: Colors.white54),
-                        ),
-                        const TextSpan(text: '  ', style: TextStyle(color: Colors.white70)),
-                        TextSpan(
-                          text: e.message,
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                        if (e.error != null)
-                          TextSpan(
-                            text: '\n↳ ${e.error}',
-                            style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-                          ),
-                        if (e.stackTrace != null)
-                          TextSpan(
-                            text: '\n↳ ${e.stackTrace}',
-                            style: const TextStyle(color: Colors.purpleAccent, fontSize: 11),
-                          ),
-                      ],
-                    ),
-                  ),
+            child: StreamBuilder<ConnectionLogEntry>(
+              stream: logStream,
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  _entries.add(snapshot.data!);
+                }
+                return ListView.builder(
+                  itemCount: _entries.length,
+                  itemBuilder: (context, index) {
+                    final e = _entries[index];
+                    return _buildEntry(e);
+                  },
                 );
               },
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildEntry(ConnectionLogEntry e) {
+    final ts = e.timestamp.toIso8601String();
+    final tagText = e.tag != null ? ' [${e.tag}]' : '';
+
+    // ERROR: bgRed + white/bold, show error/stack
+    if (e.level == 'ERROR') {
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.red.shade700,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: DefaultTextStyle(
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$ts ERROR$tagText  ${e.message}'),
+              if (e.error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2.0),
+                  child: Text('↳ ${e.error}', style: const TextStyle(color: Colors.white)),
+                ),
+              if (e.stackTrace != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2.0),
+                  child: Text('↳ ${e.stackTrace}', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 11)),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Non-error entries: styled inline
+    final levelColor = _levelColor(e.level);
+    final levelWeight = _levelWeight(e.level);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: '$ts ',
+              style: const TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+            TextSpan(
+              text: '${e.level} ',
+              style: TextStyle(color: levelColor, fontWeight: levelWeight),
+            ),
+            TextSpan(
+              text: tagText,
+              style: const TextStyle(color: Colors.white54),
+            ),
+            const TextSpan(text: '  ', style: TextStyle(color: Colors.white70)),
+            TextSpan(
+              text: e.message,
+              style: const TextStyle(color: Colors.white70),
+            ),
+            if (e.level == 'WARN' && e.error != null)
+              const TextSpan(text: '  '),
+            if (e.level == 'WARN' && e.error != null)
+              TextSpan(
+                text: '↳ ${e.error}',
+                style: const TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
