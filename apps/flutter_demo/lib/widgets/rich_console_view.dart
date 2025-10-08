@@ -40,7 +40,7 @@ class _RichConsoleViewState extends State<RichConsoleView> {
   Color _levelColor(String level) {
     switch (level) {
       case 'DEBUG':
-        return Colors.cyanAccent;
+        return Colors.cyanAccent.withOpacity(0.7); // dimmer cyan
       case 'INFO':
         return Colors.greenAccent;
       case 'WARN':
@@ -191,6 +191,10 @@ class _RichConsoleViewState extends State<RichConsoleView> {
     final levelColor = _levelColor(e.level);
     final levelWeight = _levelWeight(e.level);
 
+    final messageStyle = (e.level == 'WARN')
+        ? const TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold)
+        : const TextStyle(color: Colors.white70);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: RichText(
@@ -211,7 +215,7 @@ class _RichConsoleViewState extends State<RichConsoleView> {
             const TextSpan(text: '  ', style: TextStyle(color: Colors.white70)),
             TextSpan(
               text: e.message,
-              style: const TextStyle(color: Colors.white70),
+              style: messageStyle,
             ),
             if (e.level == 'WARN' && e.error != null)
               const TextSpan(text: '  '),
