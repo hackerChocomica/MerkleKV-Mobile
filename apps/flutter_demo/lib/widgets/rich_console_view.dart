@@ -21,6 +21,7 @@ class RichConsoleView extends StatefulWidget {
 
 class _RichConsoleViewState extends State<RichConsoleView> {
   final List<ConnectionLogEntry> _entries = <ConnectionLogEntry>[];
+  ConnectionLogEntry? _lastAppended;
 
   @override
   void initState() {
@@ -100,7 +101,8 @@ class _RichConsoleViewState extends State<RichConsoleView> {
             child: StreamBuilder<ConnectionLogEntry>(
               stream: logStream,
               builder: (context, snapshot) {
-                if (snapshot.hasData) {
+                if (snapshot.hasData && !identical(snapshot.data, _lastAppended)) {
+                  _lastAppended = snapshot.data;
                   _entries.add(snapshot.data!);
                 }
                 return ListView.builder(
