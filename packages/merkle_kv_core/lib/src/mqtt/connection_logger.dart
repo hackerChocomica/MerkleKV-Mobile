@@ -110,6 +110,35 @@ class StreamConnectionLogger implements ConnectionLogger {
   /// Returns a copy of the current rolling buffer (most recent last).
   List<ConnectionLogEntry> get bufferSnapshot => List.unmodifiable(_buffer);
 
+  /// Returns a filtered view of the live stream. Filters are optional and
+  /// composed with AND semantics when multiple are provided.
+  Stream<ConnectionLogEntry> filtered({
+    Set<String>? levels,
+    String? tag,
+    String? contains,
+  }) {
+    return stream.where((e) {
+      if (levels != null && levels.isNotEmpty && !levels.contains(e.level)) {
+        return false;
+      }
+      if (tag != null && tag.isNotEmpty && e.tag != tag) {
+        return false;
+      }
+      if (contains != null && contains.isNotEmpty) {
+        final text = '${e.message} ${e.error ?? ''} ${e.stackTrace ?? ''}';
+        if (!text.toLowerCase().contains(contains.toLowerCase())) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  /// Clears the rolling buffer. Does not affect the live stream.
+  void clear() {
+    _buffer.clear();
+  }
+
   void _emit(ConnectionLogEntry e) {
     // Maintain rolling buffer
     _buffer.add(e);
