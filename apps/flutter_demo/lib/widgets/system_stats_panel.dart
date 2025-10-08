@@ -208,8 +208,8 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
       if (dt > 0) {
         rxKbps = ((net['rx']! - _prevRx!) / dt) / 1024.0;
         txKbps = ((net['tx']! - _prevTx!) / dt) / 1024.0;
-        if (rxKbps! < 0) rxKbps = 0;
-        if (txKbps! < 0) txKbps = 0;
+        if (rxKbps < 0) rxKbps = 0;
+        if (txKbps < 0) txKbps = 0;
       }
     }
     _prevRx = net['rx'];
