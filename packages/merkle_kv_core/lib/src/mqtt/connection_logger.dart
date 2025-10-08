@@ -2,6 +2,10 @@
 /// 
 /// This provides a lightweight abstraction over logging that can be 
 /// configured or replaced as needed without changing the core implementation.
+import 'dart:async';
+
+import 'log_entry.dart';
+
 abstract class ConnectionLogger {
   /// Log a debug message.
   void debug(String message);
@@ -78,4 +82,96 @@ class SilentConnectionLogger implements ConnectionLogger {
   
   @override
   void error(String message, [Object? error, StackTrace? stackTrace]) {}
+}
+
+/// A streaming logger that blasts vibrant, console-style logs and exposes
+/// a broadcast stream for UI consoles. It also keeps a rolling buffer
+/// so late subscribers can render recent history instantly.
+class StreamConnectionLogger implements ConnectionLogger {
+  final String tag;
+  final bool enableDebug;
+  final int bufferSize;
+  final bool mirrorToConsole;
+
+  final StreamController<ConnectionLogEntry> _controller =
+      StreamController<ConnectionLogEntry>.broadcast();
+  final List<ConnectionLogEntry> _buffer = <ConnectionLogEntry>[];
+
+  StreamConnectionLogger({
+    this.tag = 'MQTT-Core',
+    this.enableDebug = true,
+    this.bufferSize = 500,
+    this.mirrorToConsole = true,
+  });
+
+  /// A broadcast stream of rich log entries suitable for app UIs.
+  Stream<ConnectionLogEntry> get stream => _controller.stream;
+
+  /// Returns a copy of the current rolling buffer (most recent last).
+  List<ConnectionLogEntry> get bufferSnapshot => List.unmodifiable(_buffer);
+
+  void _emit(ConnectionLogEntry e) {
+    // Maintain rolling buffer
+    _buffer.add(e);
+    if (_buffer.length > bufferSize) {
+      _buffer.removeRange(0, _buffer.length - bufferSize);
+    }
+    // Emit to subscribers
+    if (!_controller.isClosed) {
+      _controller.add(e);
+    }
+    // Optional console mirror with color
+    if (mirrorToConsole) {
+      // ignore: avoid_print
+      print(formatAnsi(e));
+    }
+  }
+
+  @override
+  void debug(String message) {
+    if (!enableDebug) return;
+    _emit(ConnectionLogEntry(
+      timestamp: DateTime.now(),
+      level: 'DEBUG',
+      message: message,
+      tag: tag,
+    ));
+  }
+
+  @override
+  void info(String message) {
+    _emit(ConnectionLogEntry(
+      timestamp: DateTime.now(),
+      level: 'INFO',
+      message: message,
+      tag: tag,
+    ));
+  }
+
+  @override
+  void warn(String message) {
+    _emit(ConnectionLogEntry(
+      timestamp: DateTime.now(),
+      level: 'WARN',
+      message: message,
+      tag: tag,
+    ));
+  }
+
+  @override
+  void error(String message, [Object? error, StackTrace? stackTrace]) {
+    _emit(ConnectionLogEntry(
+      timestamp: DateTime.now(),
+      level: 'ERROR',
+      message: message,
+      tag: tag,
+      error: error,
+      stackTrace: stackTrace,
+    ));
+  }
+
+  /// Close the stream when the logger is disposed.
+  Future<void> dispose() async {
+    await _controller.close();
+  }
 }
