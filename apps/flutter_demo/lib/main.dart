@@ -59,7 +59,7 @@ class _MyHomePageState extends State<MyHomePage> {
           ],
         ),
         body: SizedBox.expand(
-          child: Container(
+          child: DecoratedBox(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -67,6 +67,7 @@ class _MyHomePageState extends State<MyHomePage> {
               colors: [Color(0xFF0f2027), Color(0xFF203a43), Color(0xFF2c5364)],
             ),
           ),
+          position: DecorationPosition.background,
           child: SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),

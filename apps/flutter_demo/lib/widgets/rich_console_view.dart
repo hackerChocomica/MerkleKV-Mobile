@@ -107,6 +107,7 @@ class _RichConsoleViewState extends State<RichConsoleView> {
                 }
                 return ListView.builder(
                   primary: false,
+                  shrinkWrap: true,
                   itemCount: _entries.length,
                   itemBuilder: (context, index) {
                     final e = _entries[index];

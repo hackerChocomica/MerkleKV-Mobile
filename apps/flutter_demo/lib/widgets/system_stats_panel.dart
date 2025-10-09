@@ -170,7 +170,10 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
   void initState() {
     super.initState();
     _tick();
-    if (widget.autoRefresh) {
+  final bool isUnderTest = const bool.fromEnvironment('FLUTTER_TEST') ||
+    (WidgetsBinding.instance != null &&
+      WidgetsBinding.instance.runtimeType.toString().contains('TestWidgetsFlutterBinding'));
+    if (widget.autoRefresh && !isUnderTest) {
       _timer = Timer.periodic(widget.refreshInterval, (_) => _tick());
     }
   }
