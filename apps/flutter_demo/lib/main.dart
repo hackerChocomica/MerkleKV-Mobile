@@ -133,7 +133,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         return DecoratedBox(
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: const BorderRadius.all(Radius.circular(10)),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
@@ -158,7 +158,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       return DecoratedBox(
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: const BorderRadius.all(Radius.circular(10)),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(8.0),
