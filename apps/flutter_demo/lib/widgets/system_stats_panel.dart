@@ -141,12 +141,14 @@ class SystemStatsPanel extends StatefulWidget {
   final Duration refreshInterval;
   final Directory? storageDir; // optional directory to compute size
   final bool includeLoopback;
+  final bool autoRefresh; // allow test harnesses to disable timers
 
   const SystemStatsPanel({
     super.key,
     this.refreshInterval = const Duration(seconds: 1),
     this.storageDir,
     this.includeLoopback = false,
+    this.autoRefresh = true,
   });
 
   @override
@@ -168,7 +170,9 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
   void initState() {
     super.initState();
     _tick();
-    _timer = Timer.periodic(widget.refreshInterval, (_) => _tick());
+    if (widget.autoRefresh) {
+      _timer = Timer.periodic(widget.refreshInterval, (_) => _tick());
+    }
   }
 
   @override
@@ -178,7 +182,10 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
   }
 
   Future<void> _tick() async {
+    // If the widget is already disposed or unmounted, do nothing.
+    if (!mounted) return;
     if (!(Platform.isLinux || Platform.isAndroid)) {
+      if (!mounted) return;
       setState(() => _stats = const SystemStats());
       return;
     }
@@ -221,6 +228,7 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
       storageUsed = await _reader.computeDirectorySizeBytes(widget.storageDir!);
     }
 
+    if (!mounted) return;
     setState(() {
       _stats = SystemStats(
         memTotalBytes: mem['total'],
