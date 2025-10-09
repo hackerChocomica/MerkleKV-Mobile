@@ -50,7 +50,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-          title: Text(widget.title),
+          title: Semantics(label: 'MerkleKV Mobile Demo', child: Text(widget.title)),
           actions: const [
             Padding(
               padding: EdgeInsets.only(right: 12),
@@ -58,7 +58,8 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ],
         ),
-        body: Container(
+        body: SizedBox.expand(
+          child: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -134,6 +135,6 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
           ),
-        ),
+        )),
       );
 }

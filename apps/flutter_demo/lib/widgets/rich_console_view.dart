@@ -106,6 +106,7 @@ class _RichConsoleViewState extends State<RichConsoleView> {
                   _entries.add(snapshot.data!);
                 }
                 return ListView.builder(
+                  primary: false,
                   itemCount: _entries.length,
                   itemBuilder: (context, index) {
                     final e = _entries[index];
