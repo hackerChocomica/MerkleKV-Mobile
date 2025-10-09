@@ -12,12 +12,16 @@ void main(List<String> args) async {
   final port = int.tryParse(Platform.environment['PORT'] ?? '') ?? 8080;
 
   // Shared logger for streaming logs to websocket-ish via SSE
-  final logger = mkv.StreamConnectionLogger(tag: 'AdminAPI', mirrorToConsole: true);
+  final logger =
+      mkv.StreamConnectionLogger(tag: 'AdminAPI', mirrorToConsole: true);
 
   final app = rt.Router();
 
   // Health
-  app.get('/health', (sh.Request req) => sh.Response.ok(jsonEncode({'status': 'ok'}), headers: {'content-type': 'application/json'}));
+  app.get(
+      '/health',
+      (sh.Request req) => sh.Response.ok(jsonEncode({'status': 'ok'}),
+          headers: {'content-type': 'application/json'}));
 
   // System stats (Linux/Android via /proc)
   // Optional query params: dir=/path/to/measure&maxEntries=5000
@@ -26,13 +30,15 @@ void main(List<String> args) async {
     final dir = q['dir'];
     final maxEntries = int.tryParse(q['maxEntries'] ?? '5000') ?? 5000;
     final stats = await _readSystemStats(dirPath: dir, maxEntries: maxEntries);
-    return sh.Response.ok(jsonEncode(stats), headers: {'content-type': 'application/json'});
+    return sh.Response.ok(jsonEncode(stats),
+        headers: {'content-type': 'application/json'});
   });
 
   // Current process stats (RSS memory; raw CPU counters)
   app.get('/stats/process', (sh.Request req) async {
     final stats = await _readProcessStats();
-    return sh.Response.ok(jsonEncode(stats), headers: {'content-type': 'application/json'});
+    return sh.Response.ok(jsonEncode(stats),
+        headers: {'content-type': 'application/json'});
   });
 
   // MQTT config echo (for validation)
@@ -50,9 +56,13 @@ void main(List<String> args) async {
         password: data['password'],
         topicPrefix: data['topicPrefix'] ?? 'merkle_kv',
       );
-      return sh.Response.ok(jsonEncode({'valid': true, 'clientId': cfg.clientId}), headers: {'content-type': 'application/json'});
+      return sh.Response.ok(
+          jsonEncode({'valid': true, 'clientId': cfg.clientId}),
+          headers: {'content-type': 'application/json'});
     } catch (e) {
-      return sh.Response(400, body: jsonEncode({'valid': false, 'error': e.toString()}), headers: {'content-type': 'application/json'});
+      return sh.Response(400,
+          body: jsonEncode({'valid': false, 'error': e.toString()}),
+          headers: {'content-type': 'application/json'});
     }
   });
 
@@ -68,9 +78,17 @@ void main(List<String> args) async {
     });
 
     // Emit a hello and keepalive pings
-    write(jsonEncode({'ts': DateTime.now().toIso8601String(), 'level': 'INFO', 'message': 'SSE connected'}));
+    write(jsonEncode({
+      'ts': DateTime.now().toIso8601String(),
+      'level': 'INFO',
+      'message': 'SSE connected'
+    }));
     final ping = Timer.periodic(const Duration(seconds: 10), (_) {
-      write(jsonEncode({'ts': DateTime.now().toIso8601String(), 'level': 'DEBUG', 'message': 'ping'}));
+      write(jsonEncode({
+        'ts': DateTime.now().toIso8601String(),
+        'level': 'DEBUG',
+        'message': 'ping'
+      }));
     });
 
     controller.onCancel = () {
@@ -88,17 +106,22 @@ void main(List<String> args) async {
 
   // Recent logs as JSON (buffer snapshot). Optional query param: limit
   app.get('/logs/recent', (sh.Request req) {
-    final limit = int.tryParse(req.requestedUri.queryParameters['limit'] ?? '') ?? 200;
+    final limit =
+        int.tryParse(req.requestedUri.queryParameters['limit'] ?? '') ?? 200;
     final buf = logger.bufferSnapshot;
     final start = buf.length > limit ? buf.length - limit : 0;
-    final sliced = buf.sublist(start).map((e) => e.toJson()).toList(growable: false);
-    return sh.Response.ok(jsonEncode({'count': sliced.length, 'entries': sliced}), headers: {'content-type': 'application/json'});
+    final sliced =
+        buf.sublist(start).map((e) => e.toJson()).toList(growable: false);
+    return sh.Response.ok(
+        jsonEncode({'count': sliced.length, 'entries': sliced}),
+        headers: {'content-type': 'application/json'});
   });
 
   // Clear buffered logs
   app.post('/logs/clear', (sh.Request req) async {
     logger.clear();
-    return sh.Response.ok(jsonEncode({'cleared': true}), headers: {'content-type': 'application/json'});
+    return sh.Response.ok(jsonEncode({'cleared': true}),
+        headers: {'content-type': 'application/json'});
   });
 
   // Wrap with CORS + JSON content type
@@ -111,7 +134,8 @@ void main(List<String> args) async {
   print('Admin API listening on port ${server.port}');
 }
 
-Future<Map<String, dynamic>> _readSystemStats({String? dirPath, int maxEntries = 5000}) async {
+Future<Map<String, dynamic>> _readSystemStats(
+    {String? dirPath, int maxEntries = 5000}) async {
   int? memTotal;
   int? memAvail;
   double? cpu;
@@ -123,10 +147,12 @@ Future<Map<String, dynamic>> _readSystemStats({String? dirPath, int maxEntries =
     final lines = await File('/proc/meminfo').readAsLines();
     for (final l in lines) {
       if (l.startsWith('MemTotal:')) {
-        memTotal = int.tryParse(l.split(RegExp(r'\s+'))[1])?.let((kb) => kb * 1024);
+        memTotal =
+            int.tryParse(l.split(RegExp(r'\s+'))[1])?.let((kb) => kb * 1024);
       }
       if (l.startsWith('MemAvailable:')) {
-        memAvail = int.tryParse(l.split(RegExp(r'\s+'))[1])?.let((kb) => kb * 1024);
+        memAvail =
+            int.tryParse(l.split(RegExp(r'\s+'))[1])?.let((kb) => kb * 1024);
       }
     }
   } catch (_) {}
@@ -199,7 +225,8 @@ Future<Map<String, dynamic>> _readSystemStats({String? dirPath, int maxEntries =
       'rxBytesTotal': rx,
       'txBytesTotal': tx,
     },
-    if (storageUsed != null) 'storage': {'usedBytes': storageUsed, 'path': dirPath},
+    if (storageUsed != null)
+      'storage': {'usedBytes': storageUsed, 'path': dirPath},
   };
 }
 

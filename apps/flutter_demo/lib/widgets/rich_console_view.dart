@@ -101,7 +101,8 @@ class _RichConsoleViewState extends State<RichConsoleView> {
             child: StreamBuilder<ConnectionLogEntry>(
               stream: logStream,
               builder: (context, snapshot) {
-                if (snapshot.hasData && !identical(snapshot.data, _lastAppended)) {
+                if (snapshot.hasData &&
+                    !identical(snapshot.data, _lastAppended)) {
                   _lastAppended = snapshot.data;
                   _entries.add(snapshot.data!);
                 }
@@ -133,7 +134,8 @@ class _RichConsoleViewState extends State<RichConsoleView> {
     }
     // Contains filter
     if (widget.contains != null && widget.contains!.isNotEmpty) {
-      final hay = '${e.message} ${e.error ?? ''} ${e.stackTrace ?? ''}'.toLowerCase();
+      final hay =
+          '${e.message} ${e.error ?? ''} ${e.stackTrace ?? ''}'.toLowerCase();
       if (!hay.contains(widget.contains!.toLowerCase())) return false;
     }
     return true;
@@ -168,7 +170,8 @@ class _RichConsoleViewState extends State<RichConsoleView> {
           borderRadius: BorderRadius.circular(6),
         ),
         child: DefaultTextStyle(
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -176,12 +179,15 @@ class _RichConsoleViewState extends State<RichConsoleView> {
               if (e.error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 2.0),
-                  child: Text('↳ ${e.error}', style: const TextStyle(color: Colors.white)),
+                  child: Text('↳ ${e.error}',
+                      style: const TextStyle(color: Colors.white)),
                 ),
               if (e.stackTrace != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 2.0),
-                  child: Text('↳ ${e.stackTrace}', style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 11)),
+                  child: Text('↳ ${e.stackTrace}',
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.9), fontSize: 11)),
                 ),
             ],
           ),
@@ -194,7 +200,8 @@ class _RichConsoleViewState extends State<RichConsoleView> {
     final levelWeight = _levelWeight(e.level);
 
     final messageStyle = (e.level == 'WARN')
-        ? const TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold)
+        ? const TextStyle(
+            color: Colors.yellowAccent, fontWeight: FontWeight.bold)
         : const TextStyle(color: Colors.white70);
 
     return Padding(
@@ -224,7 +231,8 @@ class _RichConsoleViewState extends State<RichConsoleView> {
             if (e.level == 'WARN' && e.error != null)
               TextSpan(
                 text: '↳ ${e.error}',
-                style: const TextStyle(color: Colors.yellowAccent, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    color: Colors.yellowAccent, fontWeight: FontWeight.bold),
               ),
           ],
         ),

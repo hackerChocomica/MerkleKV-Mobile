@@ -26,7 +26,7 @@ class MqttClientImpl implements MqttClientInterface {
   // Support multiple handlers per topic filter to avoid overwriting
   final Map<String, List<void Function(String, String)>> _subscriptions = {};
   StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>?
-    _updatesSubscription;
+      _updatesSubscription;
 
   ConnectionState _currentState = ConnectionState.disconnected;
   Timer? _reconnectTimer;
@@ -155,13 +155,15 @@ class MqttClientImpl implements MqttClientInterface {
     }
 
     _updateConnectionState(ConnectionState.connecting);
-    _logger.info('🌐 Connecting to ${_config.mqttHost}:${_config.mqttPort} (tls=${_config.mqttUseTls}, clientId=${_config.clientId})');
+    _logger.info(
+        '🌐 Connecting to ${_config.mqttHost}:${_config.mqttPort} (tls=${_config.mqttUseTls}, clientId=${_config.clientId})');
 
     try {
       await _attemptConnection();
       _reconnectAttempts = 0; // Reset on successful connection
     } catch (e) {
-      _logger.error('❌ Connect attempt failed; scheduling reconnect', e is Exception ? e : Exception(e.toString()));
+      _logger.error('❌ Connect attempt failed; scheduling reconnect',
+          e is Exception ? e : Exception(e.toString()));
       _updateConnectionState(ConnectionState.disconnected);
       _scheduleReconnect();
       rethrow;
@@ -192,9 +194,7 @@ class MqttClientImpl implements MqttClientInterface {
         // package accepts optional username/password; passing null for the
         // missing field allows brokers that accept single-credential auth
         // (e.g., token-only in password).
-        _client
-            .connect(_config.username, _config.password)
-            .then((status) {
+        _client.connect(_config.username, _config.password).then((status) {
           timeoutTimer?.cancel();
           if (!connectionCompleter.isCompleted) {
             connectionCompleter.complete(status);
@@ -375,7 +375,8 @@ class MqttClientImpl implements MqttClientInterface {
     if (_currentState != ConnectionState.connected) {
       // Queue message for later delivery
       _messageQueue.add(message);
-      _logger.warn('⏳ Queued publish to $topic (${payload.length} bytes); not connected');
+      _logger.warn(
+          '⏳ Queued publish to $topic (${payload.length} bytes); not connected');
       return;
     }
 
@@ -387,7 +388,8 @@ class MqttClientImpl implements MqttClientInterface {
     final builder = MqttClientPayloadBuilder();
     builder.addString(message.payload);
 
-    _logger.info('→ PUB ${message.topic} (${message.payload.length} bytes, qos=${message.qos.index}, retain=${message.retain})');
+    _logger.info(
+        '→ PUB ${message.topic} (${message.payload.length} bytes, qos=${message.qos.index}, retain=${message.retain})');
     _client.publishMessage(
       message.topic,
       message.qos,
@@ -412,8 +414,8 @@ class MqttClientImpl implements MqttClientInterface {
     String topic,
     void Function(String, String) handler,
   ) async {
-    final handlers =
-        _subscriptions.putIfAbsent(topic, () => <void Function(String, String)>[]);
+    final handlers = _subscriptions.putIfAbsent(
+        topic, () => <void Function(String, String)>[]);
     handlers.add(handler);
 
     if (_currentState == ConnectionState.connected) {
@@ -424,7 +426,8 @@ class MqttClientImpl implements MqttClientInterface {
 
         // Log warning if broker downgrades to QoS 0
         if (subscription?.qos == MqttQos.atMostOnce) {
-          _logger.warn('⚠ Broker downgraded subscription to QoS 0 for topic: $topic');
+          _logger.warn(
+              '⚠ Broker downgraded subscription to QoS 0 for topic: $topic');
         }
       }
     }
@@ -497,7 +500,8 @@ class MqttClientImpl implements MqttClientInterface {
             try {
               handler(topic, payload);
             } catch (e, st) {
-              _logger.error('Handler error on $topic', e is Exception ? e : Exception(e.toString()), st);
+              _logger.error('Handler error on $topic',
+                  e is Exception ? e : Exception(e.toString()), st);
             }
           }
         }

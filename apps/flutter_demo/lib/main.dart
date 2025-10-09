@@ -11,7 +11,7 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-    @override
+  @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'MerkleKV Demo',
         theme: ThemeData(
@@ -43,14 +43,16 @@ class _MyHomePageState extends State<MyHomePage> {
       _logger.info('Welcome to MerkleKV Mobile');
       _logger.debug('Boot sequence initialized');
       _logger.warn('Battery saver active; background sync paused');
-      _logger.error('Handshake failed (demo)', Exception('certificate expired'));
+      _logger.error(
+          'Handshake failed (demo)', Exception('certificate expired'));
     });
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-          title: Semantics(label: 'MerkleKV Mobile Demo', child: Text(widget.title)),
+          title: Semantics(
+              label: 'MerkleKV Mobile Demo', child: Text(widget.title)),
           actions: const [
             Padding(
               padding: EdgeInsets.only(right: 12),
@@ -59,7 +61,7 @@ class _MyHomePageState extends State<MyHomePage> {
           ],
         ),
         body: SizedBox.expand(
-          child: DecoratedBox(
+            child: DecoratedBox(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -93,8 +95,11 @@ class _MyHomePageState extends State<MyHomePage> {
                   Expanded(
                     flex: 1,
                     child: Builder(builder: (context) {
-                      final bool isUnderTest = const bool.fromEnvironment('FLUTTER_TEST') ||
-                          WidgetsBinding.instance.runtimeType.toString().contains('TestWidgetsFlutterBinding');
+                      final bool isUnderTest =
+                          const bool.fromEnvironment('FLUTTER_TEST') ||
+                              WidgetsBinding.instance.runtimeType
+                                  .toString()
+                                  .contains('TestWidgetsFlutterBinding');
                       if (isUnderTest) {
                         return Align(
                           alignment: Alignment.topLeft,
@@ -115,7 +120,8 @@ class _MyHomePageState extends State<MyHomePage> {
                             SystemStatsPanel(
                               refreshInterval: const Duration(seconds: 1),
                               storageDir: Directory.systemTemp, // demo dir
-                              autoRefresh: true, // normal app run keeps refreshing
+                              autoRefresh:
+                                  true, // normal app run keeps refreshing
                             ),
                           ],
                         ),
@@ -127,8 +133,11 @@ class _MyHomePageState extends State<MyHomePage> {
                   Expanded(
                     flex: 1,
                     child: Builder(builder: (context) {
-                      final bool isUnderTest = const bool.fromEnvironment('FLUTTER_TEST') ||
-                          WidgetsBinding.instance.runtimeType.toString().contains('TestWidgetsFlutterBinding');
+                      final bool isUnderTest =
+                          const bool.fromEnvironment('FLUTTER_TEST') ||
+                              WidgetsBinding.instance.runtimeType
+                                  .toString()
+                                  .contains('TestWidgetsFlutterBinding');
                       const Row header = Row(
                         children: [
                           Icon(Icons.terminal, color: Colors.greenAccent),
@@ -146,7 +155,8 @@ class _MyHomePageState extends State<MyHomePage> {
                         return DecoratedBox(
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.6),
-                            borderRadius: const BorderRadius.all(Radius.circular(10)),
+                            borderRadius:
+                                const BorderRadius.all(Radius.circular(10)),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
@@ -171,7 +181,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       return DecoratedBox(
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.6),
-                          borderRadius: const BorderRadius.all(Radius.circular(10)),
+                          borderRadius:
+                              const BorderRadius.all(Radius.circular(10)),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(8.0),
@@ -183,7 +194,12 @@ class _MyHomePageState extends State<MyHomePage> {
                               Expanded(
                                 child: RichConsoleView(
                                   logger: _logger,
-                                  levels: const {'DEBUG', 'INFO', 'WARN', 'ERROR'},
+                                  levels: const {
+                                    'DEBUG',
+                                    'INFO',
+                                    'WARN',
+                                    'ERROR'
+                                  },
                                   tag: 'Dashboard',
                                 ),
                               ),

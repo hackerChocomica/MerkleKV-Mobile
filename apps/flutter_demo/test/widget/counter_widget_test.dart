@@ -61,8 +61,7 @@ void main() {
       expect(find.byType(SafeArea), findsOneWidget);
     });
 
-    testWidgets('Text widgets include key labels',
-        (WidgetTester tester) async {
+    testWidgets('Text widgets include key labels', (WidgetTester tester) async {
       // Build our app and trigger a frame.
       await tester.pumpWidget(const MyApp());
 
