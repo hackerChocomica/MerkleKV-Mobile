@@ -122,7 +122,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     child: Builder(builder: (context) {
                       final bool isUnderTest = const bool.fromEnvironment('FLUTTER_TEST') ||
                           WidgetsBinding.instance.runtimeType.toString().contains('TestWidgetsFlutterBinding');
-                      final header = const Row(
+                      const Row header = Row(
                         children: [
                           Icon(Icons.terminal, color: Colors.greenAccent),
                           SizedBox(width: 8),
