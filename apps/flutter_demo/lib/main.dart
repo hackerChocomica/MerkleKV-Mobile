@@ -90,6 +90,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           SystemStatsPanel(
                             refreshInterval: const Duration(seconds: 1),
                             storageDir: Directory.systemTemp, // demo dir
+                            autoRefresh: true, // normal app run keeps refreshing
                           ),
                         ],
                       ),
