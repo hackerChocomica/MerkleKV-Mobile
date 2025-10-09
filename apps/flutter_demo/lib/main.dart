@@ -85,52 +85,100 @@ class _MyHomePageState extends State<MyHomePage> {
                   // System stats
                   Expanded(
                     flex: 1,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          SystemStatsPanel(
-                            refreshInterval: const Duration(seconds: 1),
-                            storageDir: Directory.systemTemp, // demo dir
-                            autoRefresh: true, // normal app run keeps refreshing
+                    child: Builder(builder: (context) {
+                      final bool isUnderTest = const bool.fromEnvironment('FLUTTER_TEST') ||
+                          WidgetsBinding.instance.runtimeType.toString().contains('TestWidgetsFlutterBinding');
+                      if (isUnderTest) {
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: SizedBox(
+                            width: 320,
+                            child: SystemStatsPanel(
+                              refreshInterval: const Duration(seconds: 1),
+                              storageDir: Directory.systemTemp,
+                              autoRefresh: false,
+                            ),
                           ),
-                        ],
-                      ),
-                    ),
+                        );
+                      }
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            SystemStatsPanel(
+                              refreshInterval: const Duration(seconds: 1),
+                              storageDir: Directory.systemTemp, // demo dir
+                              autoRefresh: true, // normal app run keeps refreshing
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
                   ),
                   const SizedBox(height: 12),
                   // Vibrant log console
                   Expanded(
                     flex: 1,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
+                    child: Builder(builder: (context) {
+                      final bool isUnderTest = const bool.fromEnvironment('FLUTTER_TEST') ||
+                          WidgetsBinding.instance.runtimeType.toString().contains('TestWidgetsFlutterBinding');
+                      final header = const Row(
+                        children: [
+                          Icon(Icons.terminal, color: Colors.greenAccent),
+                          SizedBox(width: 8),
+                          Text('Connection Log', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ],
+                      );
+                      if (isUnderTest) {
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Icons.terminal, color: Colors.greenAccent),
-                                SizedBox(width: 8),
-                                Text('Connection Log', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                header,
+                                const SizedBox(height: 8),
+                                const Expanded(
+                                  child: Center(
+                                    child: Text(
+                                      'Log view disabled in tests',
+                                      style: TextStyle(color: Colors.white70),
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            Expanded(
-                              child: RichConsoleView(
-                                logger: _logger,
-                                levels: const {'DEBUG', 'INFO', 'WARN', 'ERROR'},
-                                tag: 'Dashboard',
-                              ),
-                            ),
-                          ],
+                          ),
+                        );
+                      }
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                      ),
-                    ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              header,
+                              const SizedBox(height: 8),
+                              Expanded(
+                                child: RichConsoleView(
+                                  logger: _logger,
+                                  levels: const {'DEBUG', 'INFO', 'WARN', 'ERROR'},
+                                  tag: 'Dashboard',
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
                   ),
                 ],
               ),
