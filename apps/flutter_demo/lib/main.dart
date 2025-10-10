@@ -139,7 +139,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                   .toString()
                                   .contains('TestWidgetsFlutterBinding');
                       const Row header = Row(
-                        children: const [
+                        children: [
                           Icon(Icons.terminal, color: Colors.greenAccent),
                           SizedBox(width: 8),
                           Text(
