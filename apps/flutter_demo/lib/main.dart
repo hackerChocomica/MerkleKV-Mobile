@@ -158,11 +158,11 @@ class _MyHomePageState extends State<MyHomePage> {
                             borderRadius:
                                 const BorderRadius.all(Radius.circular(10)),
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
+                          child: const Padding(
+                            padding: EdgeInsets.all(8.0),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
+                              children: [
                                 header,
                                 SizedBox(height: 8),
                                 Expanded(
