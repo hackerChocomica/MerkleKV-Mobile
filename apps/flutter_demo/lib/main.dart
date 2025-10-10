@@ -139,7 +139,7 @@ class _MyHomePageState extends State<MyHomePage> {
                                   .toString()
                                   .contains('TestWidgetsFlutterBinding');
                       const Row header = Row(
-                        children: [
+                        children: const [
                           Icon(Icons.terminal, color: Colors.greenAccent),
                           SizedBox(width: 8),
                           Text(
@@ -162,10 +162,10 @@ class _MyHomePageState extends State<MyHomePage> {
                             padding: const EdgeInsets.all(8.0),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
+                              children: const [
                                 header,
-                                const SizedBox(height: 8),
-                                const Expanded(
+                                SizedBox(height: 8),
+                                Expanded(
                                   child: Center(
                                     child: Text(
                                       'Log view disabled in tests',
