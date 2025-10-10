@@ -162,10 +162,10 @@ class _MyHomePageState extends State<MyHomePage> {
                             padding: const EdgeInsets.all(8.0),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
+                              children: [
                                 header,
-                                SizedBox(height: 8),
-                                Expanded(
+                                const SizedBox(height: 8),
+                                const Expanded(
                                   child: Center(
                                     child: Text(
                                       'Log view disabled in tests',
