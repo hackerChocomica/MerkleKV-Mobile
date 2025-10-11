@@ -320,21 +320,27 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
               ],
             );
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (hasFiniteWidth)
-              Wrap(
+        // Build the core content once
+        final Widget content = hasFiniteWidth
+            ? Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: cards,
               )
-            else
-              // When width is unbounded (e.g., inside a horizontal scroller),
-              // prefer Row to avoid giving RenderWrap infinite width.
-              rowWithSpacing(cards),
-          ],
-        );
+            : rowWithSpacing(cards);
+
+        // If height is constrained (e.g., tests with small viewport),
+        // allow vertical scrolling to avoid RenderFlex overflow.
+        if (constraints.maxHeight.isFinite) {
+          return SingleChildScrollView(
+            primary: false,
+            padding: EdgeInsets.zero,
+            child: content,
+          );
+        }
+
+        // Otherwise, just return the content directly.
+        return content;
       },
     );
   }
