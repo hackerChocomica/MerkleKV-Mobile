@@ -16,10 +16,12 @@ void main() {
     topicPrefix: 'merkle_kv/test',
   );
 
-  print('Config built. mqttUseTls=${cfg.mqttUseTls}, hasPassword=${cfg.password != null}');
+  print(
+      'Config built. mqttUseTls=${cfg.mqttUseTls}, hasPassword=${cfg.password != null}');
   // Ensure client can be constructed without immediate TLS validation error
   final client = MqttClientImpl(cfg);
   // Reference the client so the analyzer doesn't warn about unused local variable
-  print('Client initialized. Port=${cfg.mqttPort}, state=${client.currentConnectionState}');
+  print(
+      'Client initialized. Port=${cfg.mqttPort}, state=${client.currentConnectionState}');
   // Do not actually connect in this smoke test.
 }

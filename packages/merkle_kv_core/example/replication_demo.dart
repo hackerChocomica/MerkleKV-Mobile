@@ -25,7 +25,8 @@ class MockMqttClient implements MqttClientInterface {
   }
 
   @override
-  Future<void> publish(String topic, String payload, {bool forceQoS1 = true, bool forceRetainFalse = true}) async {
+  Future<void> publish(String topic, String payload,
+      {bool forceQoS1 = true, bool forceRetainFalse = true}) async {
     if (_state != ConnectionState.connected) {
       throw Exception('Not connected');
     }
@@ -34,7 +35,8 @@ class MockMqttClient implements MqttClientInterface {
   }
 
   @override
-  Future<void> subscribe(String topic, void Function(String, String) handler) async {
+  Future<void> subscribe(
+      String topic, void Function(String, String) handler) async {
     print('MQTT: Subscribed to $topic');
   }
 
@@ -69,14 +71,14 @@ class ReplicatingCommandProcessor {
     required ReplicationEventPublisher eventPublisher,
     required MerkleKVConfig config,
     required StorageInterface storage,
-  }) : _processor = processor, 
-       _eventPublisher = eventPublisher,
-       _config = config,
-       _storage = storage;
+  })  : _processor = processor,
+        _eventPublisher = eventPublisher,
+        _config = config,
+        _storage = storage;
 
   Future<Response> set(String key, String value, String id) async {
     final response = await _processor.set(key, value, id);
-    
+
     // Publish replication event on successful SET
     if (response.isSuccess) {
       try {
@@ -88,33 +90,33 @@ class ReplicatingCommandProcessor {
         print('Warning: Failed to publish replication event for SET: $e');
       }
     }
-    
+
     return response;
   }
 
   Future<Response> delete(String key, String id) async {
     final response = await _processor.delete(key, id);
-    
+
     // Publish replication event on successful DELETE
     if (response.isSuccess) {
       try {
         // Create a tombstone entry for replication
         final timestampMs = DateTime.now().millisecondsSinceEpoch;
         final seq = ++_sequenceNumber;
-        
+
         final tombstoneEntry = StorageEntry.tombstone(
           key: key,
           timestampMs: timestampMs,
           nodeId: _config.nodeId,
           seq: seq,
         );
-        
+
         await _eventPublisher.publishStorageEvent(tombstoneEntry);
       } catch (e) {
         print('Warning: Failed to publish replication event for DELETE: $e');
       }
     }
-    
+
     return response;
   }
 
@@ -147,7 +149,7 @@ void main() async {
     final mockMqtt = MockMqttClient();
     final topicScheme = TopicScheme.create(config.topicPrefix, config.clientId);
     final metrics = InMemoryReplicationMetrics();
-    
+
     final storage = StorageFactory.create(config);
     await storage.initialize();
 
@@ -160,7 +162,7 @@ void main() async {
     await eventPublisher.initialize();
 
     final baseCommandProcessor = CommandProcessorImpl(config, storage);
-    
+
     final commandProcessor = ReplicatingCommandProcessor(
       processor: baseCommandProcessor,
       eventPublisher: eventPublisher,
@@ -179,17 +181,19 @@ void main() async {
 
     // Demonstrate operations with replication
     print('--- Performing Operations ---');
-    
+
     // SET operation
     print('1. SET user:123 "John Doe"');
-    final setResponse = await commandProcessor.set('user:123', 'John Doe', 'req-1');
+    final setResponse =
+        await commandProcessor.set('user:123', 'John Doe', 'req-1');
     print('   Response: ${setResponse.status}');
     print('   Metrics: ${metrics}');
     print('');
 
     // SET another key
     print('2. SET user:456 "Jane Smith"');
-    final setResponse2 = await commandProcessor.set('user:456', 'Jane Smith', 'req-2');
+    final setResponse2 =
+        await commandProcessor.set('user:456', 'Jane Smith', 'req-2');
     print('   Response: ${setResponse2.status}');
     print('   Metrics: ${metrics}');
     print('');
@@ -206,7 +210,8 @@ void main() async {
     mockMqtt.simulateDisconnection();
 
     print('4. SET user:789 "Bob Wilson" (while offline)');
-    final offlineResponse = await commandProcessor.set('user:789', 'Bob Wilson', 'req-4');
+    final offlineResponse =
+        await commandProcessor.set('user:789', 'Bob Wilson', 'req-4');
     print('   Response: ${offlineResponse.status}');
     print('   Metrics: ${metrics}');
     print('');
@@ -233,10 +238,10 @@ void main() async {
     // Demonstrate sequence persistence
     print('--- Testing Sequence Persistence ---');
     print('Current sequence: ${eventPublisher.currentSequence}');
-    
+
     // Dispose and recreate to test recovery
     await eventPublisher.dispose();
-    
+
     final newEventPublisher = ReplicationEventPublisherImpl(
       config: config,
       mqttClient: mockMqtt,
@@ -244,7 +249,7 @@ void main() async {
       metrics: metrics,
     );
     await newEventPublisher.initialize();
-    
+
     print('Recovered sequence: ${newEventPublisher.currentSequence}');
     print('Next sequence would be: ${newEventPublisher.currentSequence + 1}');
 
@@ -254,8 +259,8 @@ void main() async {
     print('\n=== Demo Complete ===');
     print('Total events published: ${metrics.eventsPublished}');
     print('Total publish errors: ${metrics.publishErrors}');
-    print('Average publish latency: ${metrics.publishLatencies.isEmpty ? 0 : metrics.publishLatencies.reduce((a, b) => a + b) / metrics.publishLatencies.length}ms');
-
+    print(
+        'Average publish latency: ${metrics.publishLatencies.isEmpty ? 0 : metrics.publishLatencies.reduce((a, b) => a + b) / metrics.publishLatencies.length}ms');
   } finally {
     await tempDir.delete(recursive: true);
   }

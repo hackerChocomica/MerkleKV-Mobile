@@ -17,9 +17,9 @@ void main() {
 
     // Verify that our app shows the correct title.
     expect(find.text('MerkleKV Mobile Demo'), findsWidgets);
-    
-    // Verify that the success message is shown.
-    expect(find.text('Package structure initialized successfully!'), findsOneWidget);
+    // Verify main dashboard and log sections are present.
+    expect(find.text('Live System Dashboard'), findsOneWidget);
+    expect(find.text('Connection Log'), findsOneWidget);
 
     // Verify that the app bar is present.
     expect(find.byType(AppBar), findsOneWidget);

@@ -84,7 +84,8 @@ class ProcStatsReader {
             final irq = int.tryParse(parts[6]) ?? 0;
             final softirq = int.tryParse(parts[7]) ?? 0;
             final steal = parts.length > 8 ? (int.tryParse(parts[8]) ?? 0) : 0;
-            final total = user + nice + system + idle + iowait + irq + softirq + steal;
+            final total =
+                user + nice + system + idle + iowait + irq + softirq + steal;
             final idleAll = idle + iowait;
             return {'total': total, 'idle': idleAll};
           }
@@ -94,7 +95,8 @@ class ProcStatsReader {
     return {'total': null, 'idle': null};
   }
 
-  Future<Map<String, int?>> readNetBytesTotals({bool includeLoopback = false}) async {
+  Future<Map<String, int?>> readNetBytesTotals(
+      {bool includeLoopback = false}) async {
     try {
       final lines = await File('/proc/net/dev').readAsLines();
       int rx = 0;
@@ -106,7 +108,8 @@ class ProcStatsReader {
         if (!includeLoopback && iface == 'lo') continue;
         final fields = parts[1].trim().split(RegExp(r'\s+'));
         if (fields.length >= 16) {
-          final rxBytes = int.tryParse(fields[0]) ?? 0; // first field = rx bytes
+          final rxBytes =
+              int.tryParse(fields[0]) ?? 0; // first field = rx bytes
           final txBytes = int.tryParse(fields[8]) ?? 0; // 9th field = tx bytes
           rx += rxBytes;
           tx += txBytes;
@@ -118,7 +121,8 @@ class ProcStatsReader {
     }
   }
 
-  Future<int?> computeDirectorySizeBytes(Directory dir, {int maxEntries = 5000}) async {
+  Future<int?> computeDirectorySizeBytes(Directory dir,
+      {int maxEntries = 5000}) async {
     try {
       int total = 0;
       int count = 0;
@@ -170,8 +174,10 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
   void initState() {
     super.initState();
     _tick();
-  final bool isUnderTest = const bool.fromEnvironment('FLUTTER_TEST') ||
-    WidgetsBinding.instance.runtimeType.toString().contains('TestWidgetsFlutterBinding');
+    final bool isUnderTest = const bool.fromEnvironment('FLUTTER_TEST') ||
+        WidgetsBinding.instance.runtimeType
+            .toString()
+            .contains('TestWidgetsFlutterBinding');
     if (widget.autoRefresh && !isUnderTest) {
       _timer = Timer.periodic(widget.refreshInterval, (_) => _tick());
     }
@@ -194,10 +200,14 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
 
     final mem = await _reader.readMemInfo();
     final cpu = await _reader.readCpuJiffies();
-    final net = await _reader.readNetBytesTotals(includeLoopback: widget.includeLoopback);
+    final net = await _reader.readNetBytesTotals(
+        includeLoopback: widget.includeLoopback);
 
     double? cpuPct;
-    if (cpu['total'] != null && cpu['idle'] != null && _prevCpuTotal != null && _prevCpuIdle != null) {
+    if (cpu['total'] != null &&
+        cpu['idle'] != null &&
+        _prevCpuTotal != null &&
+        _prevCpuIdle != null) {
       final dTotal = (cpu['total']! - _prevCpuTotal!).toDouble();
       final dIdle = (cpu['idle']! - _prevCpuIdle!).toDouble();
       if (dTotal > 0) {
@@ -212,7 +222,11 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
     double? rxKbps;
     double? txKbps;
     final now = DateTime.now();
-    if (net['rx'] != null && net['tx'] != null && _prevRx != null && _prevTx != null && _prevNetSample != null) {
+    if (net['rx'] != null &&
+        net['tx'] != null &&
+        _prevRx != null &&
+        _prevTx != null &&
+        _prevNetSample != null) {
       final dt = now.difference(_prevNetSample!).inMilliseconds / 1000.0;
       if (dt > 0) {
         rxKbps = ((net['rx']! - _prevRx!) / dt) / 1024.0;
@@ -255,22 +269,29 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
         icon: Icons.memory,
         title: 'Memory',
         value: _formatMemUsage(),
-        progress: _stats.memUsagePercent != null ? (_stats.memUsagePercent! / 100.0) : null,
+        progress: _stats.memUsagePercent != null
+            ? (_stats.memUsagePercent! / 100.0)
+            : null,
       ),
       _statCard(
         color1: Colors.greenAccent,
         color2: Colors.lightGreenAccent,
         icon: Icons.speed,
         title: 'CPU',
-        value: _stats.cpuPercent != null ? '${_stats.cpuPercent!.toStringAsFixed(1)} %' : 'N/A',
-        progress: _stats.cpuPercent != null ? (_stats.cpuPercent! / 100.0) : null,
+        value: _stats.cpuPercent != null
+            ? '${_stats.cpuPercent!.toStringAsFixed(1)} %'
+            : 'N/A',
+        progress:
+            _stats.cpuPercent != null ? (_stats.cpuPercent! / 100.0) : null,
       ),
       _statCard(
         color1: Colors.deepPurpleAccent,
         color2: Colors.purpleAccent,
         icon: Icons.storage,
         title: 'Storage',
-        value: _stats.storageUsedBytes != null ? _formatBytes(_stats.storageUsedBytes!) : 'N/A',
+        value: _stats.storageUsedBytes != null
+            ? _formatBytes(_stats.storageUsedBytes!)
+            : 'N/A',
         progress: null, // total unknown without platform APIs
       ),
       _statCard(
@@ -299,21 +320,27 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
               ],
             );
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (hasFiniteWidth)
-              Wrap(
+        // Build the core content once
+        final Widget content = hasFiniteWidth
+            ? Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: cards,
               )
-            else
-              // When width is unbounded (e.g., inside a horizontal scroller),
-              // prefer Row to avoid giving RenderWrap infinite width.
-              rowWithSpacing(cards),
-          ],
-        );
+            : rowWithSpacing(cards);
+
+        // If height is constrained (e.g., tests with small viewport),
+        // allow vertical scrolling to avoid RenderFlex overflow.
+        if (constraints.maxHeight.isFinite) {
+          return SingleChildScrollView(
+            primary: false,
+            padding: EdgeInsets.zero,
+            child: content,
+          );
+        }
+
+        // Otherwise, just return the content directly.
+        return content;
       },
     );
   }
@@ -360,7 +387,10 @@ class _SystemStatsPanelState extends State<SystemStatsPanel> {
         gradient: LinearGradient(colors: [color1, color2]),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(color: color2.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6)),
+          BoxShadow(
+              color: color2.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 6)),
         ],
       ),
       child: Column(
