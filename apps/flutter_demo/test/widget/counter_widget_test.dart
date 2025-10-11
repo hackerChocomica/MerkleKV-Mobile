@@ -57,8 +57,8 @@ void main() {
       expect(find.byType(Scaffold), findsOneWidget);
       expect(find.byType(AppBar), findsOneWidget);
 
-      // Verify body contains the expected widgets
-      expect(find.byType(SafeArea), findsOneWidget);
+  // Verify body contains SafeArea (AppBar may also include an internal SafeArea)
+  expect(find.byType(SafeArea), findsWidgets);
     });
 
     testWidgets('Text widgets include key labels', (WidgetTester tester) async {
